@@ -1,0 +1,45 @@
+{
+    "licenseKey": "oxehU8a7pT5U0vVWX3HU",
+    "campaigns": [
+        {
+            "results": 1,
+            "spent": 1,
+            "reach": 1,
+            "views": 1
+        },
+        {
+            "results": 2,
+            "spent": 2,
+            "reach": 2,
+            "views": 2
+        }
+    ],
+    "adsetsOption": [
+        {
+            "results": 2,
+            "spent": 2,
+            "reach": 2,
+            "views": 2
+        },
+        {
+            "results": 2,
+            "spent": 2,
+            "reach": 2,
+            "views": 2
+        }
+    ],
+    "adsOption": [
+        {
+            "results": 3,
+            "spent": 3,
+            "reach": 3,
+            "views": 3
+        },
+        {
+            "results": 3,
+            "spent": 3,
+            "reach": 3,
+            "views": 3
+        }
+    ]
+}
