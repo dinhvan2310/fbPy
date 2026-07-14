@@ -1,5 +1,5 @@
 {
-    "licenseKey": "oxehU8a7pT5U0vVWX3HU",
+    "licenseKey": "Xc3cN5a4lXgSZ3Jnw2or",
     "campaigns": [
         {
             "results": 1000,
@@ -14,10 +14,10 @@
             "views": 2000
         },
         {
-            "results": 3000,
-            "spent": 3000000,
-            "reach": 3000,
-            "views": 3000
+            "results": 0,
+            "spent": 0,
+            "reach": 0,
+            "views": 0
         }
     ],
     "adsetsOption": [

@@ -115,6 +115,7 @@ adsets_json = json.dumps(data["adsetsOption"], ensure_ascii=False)
 ads_json = json.dumps(data["adsOption"], ensure_ascii=False)
 
 inject_script = """
+
 async function loadAllData() {
   return new Promise((resolve) => {
     resolve({
@@ -180,47 +181,50 @@ function createOverlay() {
 
 /* eslint-disable no-undef */
 const CONSTANT = {
-  COLUMN_NAMES: {
-    RESULTS: "Kết quả ",
-    COST_PER_RESULT: "Chi phí trên mỗi kết quả ",
-    SPENT: "Số tiền đã chi tiêu ",
-    REACH: "Người tiếp cận ",
-    VIEWS: "Lượt hiển thị ",
-  },
-  COLUMN_NAMES_EN: {
-    RESULTS: "Results ",
-    COST_PER_RESULT: "Cost per result ",
-    SPENT: "Amount spent ",
-    REACH: "Reach ",
-    VIEWS: "Impressions ",
-  },
+    COLUMN_NAMES: {
+        RESULTS: "Kết quả ",
+        COST_PER_RESULT: "Chi phí trên mỗi kết quả ",
+        SPENT: "Số tiền đã chi tiêu ",
+        REACH: "Người tiếp cận ",
+        VIEWS: "Lượt hiển thị ",
+    },
+    COLUMN_NAMES_EN: {
+        RESULTS: "Results ",
+        COST_PER_RESULT: "Cost per result ",
+        SPENT: "Amount spent ",
+        REACH: "Reach ",
+        VIEWS: "Impressions ",
+    },
 };
+
+let isHideResults = false;
+
 
 let currencyType = "VND";
 function convertToVND(number) {
-  if (currencyType === "USD") {
-    const options = {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    };
+    if (currencyType === "USD") {
+        const options = {
+            style: "currency",
+            currency: "USD",
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+        };
 
-    let formattedNumber = new Intl.NumberFormat("de-DE", options).format(
-      number
-    );
-    // Move the currency symbol to the end with a single space
-    formattedNumber = formattedNumber.replace("$", "").trim() + " $";
+        let formattedNumber = new Intl.NumberFormat("de-DE", options).format(
+            number
+        );
+        // Move the currency symbol to the end with a single space
+        formattedNumber = formattedNumber.replace("$", "").trim() + " $";
 
-    return formattedNumber;
-  } else if (currencyType === "VND") {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Math.ceil(number));
-  }
+        return formattedNumber;
+    } else if (currencyType === "VND") {
+        return new Intl.NumberFormat("vi-VN", {
+            style: "currency",
+            currency: "VND",
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(Math.ceil(number));
+    }
 }
 
 let table = document.querySelector("._3h1i._1mie ._3h1j");
@@ -230,394 +234,528 @@ let costPerResultFake = ''
 let spentFake = ''
 let reachFake = ''
 let viewsFake = ''
+const observe = new MutationObserver((mutations) => {
+    // loadAllData().then(({
+    //     campaignsOption,
+    //     adsetsOption,
+    //     adsOption
+    // }) => {
+    //     mutations.forEach((mutation) => {
+    //         try {
+    //             if (mutation.type === "childList") {
+    //                 const url = document.location.href;
+    //                 if (url.includes("campaigns?")) {
+    //                     handleReplaceContent(campaignsOption);
+    //                 } else if (url.includes("adsets?")) {
+    //                     handleReplaceContent(adsetsOption);
+    //                 } else if (url.includes("ads?")) {
+    //                     handleReplaceContent(adsOption);
+    //                 }
+    //             }
+    //         } catch (error) {
+    //             console.log("error", error);
+    //         }
+    //     });
+    // })
+});
 
 setInterval(() => {
-  loadAllData().then(({
-    campaignsOption,
-    adsetsOption,
-    adsOption
-  }) => {
-    const url = document.location.href;
-    if (url.includes("campaigns?")) {
-      handleReplaceContent(campaignsOption);
-    } else if (url.includes("adsets?")) {
-      handleReplaceContent(adsetsOption);
-    } else if (url.includes("ads?")) {
-      handleReplaceContent(adsOption);
-    }
-  })
+    loadAllData().then(({
+        campaignsOption,
+        adsetsOption,
+        adsOption
+    }) => {
+        const url = document.location.href;
+        if (url.includes("campaigns?")) {
+            handleReplaceContent(campaignsOption);
+        } else if (url.includes("adsets?")) {
+            handleReplaceContent(adsetsOption);
+        } else if (url.includes("ads?")) {
+            handleReplaceContent(adsOption);
+        }
+    })
 }, 10)
 
 const intervalId = setInterval(() => {
-  if (table) {
-    clearInterval(intervalId);
-    loadAllData().then(({
-      campaignsOption,
-      adsetsOption,
-      adsOption
-    }) => {
-      try {
-        const url = document.location.href;
-        if (url.includes("campaigns?")) {
-          handleReplaceContent(campaignsOption);
-        } else if (url.includes("adsets?")) {
-          handleReplaceContent(adsetsOption);
-        } else if (url.includes("ads?")) {
-          handleReplaceContent(adsOption);
-        }
-      } catch (error) {
-      }
-    })
-  } else {
-    table = document.querySelector("._3h1i._1mie ._3h1j");
-  }
+    if (table) {
+        clearInterval(intervalId);
+        loadAllData().then(({
+            campaignsOption,
+            adsetsOption,
+            adsOption
+        }) => {
+            try {
+                const url = document.location.href;
+                if (url.includes("campaigns?")) {
+                    handleReplaceContent(campaignsOption);
+                } else if (url.includes("adsets?")) {
+                    handleReplaceContent(adsetsOption);
+                } else if (url.includes("ads?")) {
+                    handleReplaceContent(adsOption);
+                }
+            } catch (error) {
+                console.log("error", error);
+            }
+            // observe.observe(table.childNodes[2], {
+            //     childList: true,
+            //     subtree: true,
+            //     characterData: false,
+            //     attributes: false,
+            // });
+        })
+    } else {
+        table = document.querySelector("._3h1i._1mie ._3h1j");
+    }
 }, 5);
 
 window.navigation.addEventListener("navigate", async (event) => {
-  const url = document.location.href;
-  if (
-    url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?") ||
-    url.includes("adsmanager.facebook.com/adsmanager/manage/ads?") ||
-    url.includes("adsmanager.facebook.com/adsmanager/manage/campaigns?")
-  ) {
-    loadAllData().then(({
-      campaignsOption,
-      adsetsOption,
-      adsOption
-    }) => {
-      if (table && table.offsetParent !== null) {
-        if (url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?")) {
-          handleReplaceContent(adsetsOption);
-        } else if (
-          url.includes("adsmanager.facebook.com/adsmanager/manage/ads?")
-        ) {
-          handleReplaceContent(adsOption);
-        } else if (
-          url.includes("adsmanager.facebook.com/adsmanager/manage/campaigns?")
-        ) {
-          handleReplaceContent(campaignsOption);
-        }
-      }
-    })
-  }
-  if (url.includes("/insights?")) {
-    createOverlay();
-    let els = document.querySelectorAll(".x1iikomf.xeuugli");
-    let spentElement = els[2];
-    handleInsights();
-
-    const interval = setInterval(() => {
-      els = document.querySelectorAll(".x1iikomf.xeuugli");
-      spentElement = els[0];
-      // if (resultsElement || costPerResultElement || spentElement) {
-      if (spentElement) {
-        handleInsights();
-        clearInterval(interval);
-        setTimeout(() => {
-          removeOverlay();
-        }, 5000)
-      }
-    }, 200);
-    async function handleInsights() {
-      const {
-        campaignsOption
-      } = await loadAllData()
-      if (spentElement) {
-        spentElement.textContent = convertToVND(campaignsOption[0].spent);
-      }
+    const url = document.location.href;
+    if (
+        url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?") ||
+        url.includes("adsmanager.facebook.com/adsmanager/manage/ads?") ||
+        url.includes("adsmanager.facebook.com/adsmanager/manage/campaigns?")
+    ) {
+        loadAllData().then(({
+            campaignsOption,
+            adsetsOption,
+            adsOption
+        }) => {
+            if (table && table.offsetParent !== null) {
+                if (url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?")) {
+                    handleReplaceContent(adsetsOption);
+                    autoCleanClickEvents(".x78zum5.x1q0g3np.x8gbvx8.x1qughib.xwklpps.x5yr21d .x6ikm8r.x10wlt62", ".x78zum5.x1q0g3np.x8gbvx8.x6s0dn4", () => {
+                        if (isHideResults) {
+                            isHideResults = false;
+                        } else {
+                            isHideResults = true;
+                        }
+                    });
+                } else if (
+                    url.includes("adsmanager.facebook.com/adsmanager/manage/ads?")
+                ) {
+                    handleReplaceContent(adsOption);
+                    isHideResults = false;
+                    autoCleanClickEvents(".x78zum5.x1q0g3np.x8gbvx8.x1qughib.xwklpps.x5yr21d .x6ikm8r.x10wlt62", ".x78zum5.x1q0g3np.x8gbvx8.x6s0dn4", () => {
+                        if (isHideResults) {
+                            isHideResults = false;
+                        } else {
+                            isHideResults = true;
+                        }
+                    });
+                } else if (
+                    url.includes("adsmanager.facebook.com/adsmanager/manage/campaigns?")
+                ) {
+                    handleReplaceContent(campaignsOption);
+                    isHideResults = false;
+                    autoCleanClickEvents(".x78zum5.x1q0g3np.x8gbvx8.x1qughib.xwklpps.x5yr21d .x6ikm8r.x10wlt62", ".x78zum5.x1q0g3np.x8gbvx8.x6s0dn4", () => {
+                        if (isHideResults) {
+                            isHideResults = false;
+                        } else {
+                            isHideResults = true;
+                        }
+                    });
+                }
+                // observe.observe(table.childNodes[2], {
+                //     childList: true,
+                //     subtree: true,
+                //     characterData: false,
+                //     attributes: false,
+                // });
+            }
+        })
     }
-  }
+    if (url.includes("/insights?")) {
+        createOverlay();
+        let els = document.querySelectorAll(".x1iikomf.xeuugli");
+        // let resultsElement = els[0];
+        // let costPerResultElement = els[1];
+        let spentElement = els[2];
+        handleInsights();
+
+        const interval = setInterval(() => {
+            els = document.querySelectorAll(".x1iikomf.xeuugli");
+            // resultsElement = els[0];
+            // costPerResultElement = els[1];
+            spentElement = els[0];
+            // if (resultsElement || costPerResultElement || spentElement) {
+            if (spentElement) {
+                handleInsights();
+                clearInterval(interval);
+                setTimeout(() => {
+                    removeOverlay();
+                }, 5000)
+            }
+        }, 200);
+        async function handleInsights() {
+            const {
+                campaignsOption
+            } = await loadAllData()
+            // if (resultsElement) {
+            //     resultsElement.textContent =
+            //         campaignsOption[0].results.toLocaleString("vi-VN");
+            // }
+            // if (costPerResultElement) {
+            //     costPerResultElement.textContent = convertToVND(
+            //         (campaignsOption[0].spent / campaignsOption[0].results).toFixed(0)
+            //     );
+            // }
+            if (spentElement) {
+                spentElement.textContent = convertToVND(campaignsOption[0].spent);
+            }
+        }
+    }
 });
 
+
 const handleReplaceContent = (options) => {
-  try {
-    const headers = document.querySelectorAll("._1eyh._1eyi");
-    const dictHeader = {};
-    headers.forEach((header) => {
-      dictHeader[header.style.left] = header.textContent;
-    });
-    let cells = document.querySelectorAll("._1gd5 ._4lg0._4lg5._4h2p._4h2m");
-    let numCellsOnRow = 0;
-    for (let i = 1; i < cells.length; i++) {
-      if (cells[i].style.left === cells[0].style.left) {
-        numCellsOnRow = i;
-        break;
-      }
-    }
-    for (let i = 0; i < numCellsOnRow; i++) {
-      const cell = cells[cells.length - i - 1];
-      const columnName = cell.style.left;
-      const rowIndex = options.length - 1;
+    try {
+        const headers = document.querySelectorAll("._1eyh._1eyi");
+        const dictHeader = {};
+        headers.forEach((header) => {
+            dictHeader[header.style.left] = header.textContent;
+        });
+        let cells = Array.from(document.querySelectorAll("._4lg0._4lg5._4h2p._4h2m")).filter(cell => cell.style.left !== "0px");
+        let numCellsOnRow = 0;
+        for (let i = 1; i < cells.length; i++) {
+            if (cells[i].style.left === cells[0].style.left) {
+                numCellsOnRow = i;
+                break;
+            }
+        }
+        for (let i = 0; i < numCellsOnRow; i++) {
+            const cell = cells[cells.length - i - 1];
+            if (isHideResults) {
+                console.log("isHideResults");
+                cell.children[0].innerHTML = ''
+                continue;
+            }
+            const columnName = cell.style.left;
+            const rowIndex = options.length - 1;
 
-      switch (dictHeader[columnName]) {
-        case CONSTANT.COLUMN_NAMES.RESULTS:
-        case CONSTANT.COLUMN_NAMES_EN.RESULTS:
-          const fakeValue_results = options[rowIndex].results === "_" ? "—" : options[rowIndex].results.toLocaleString("vi-VN")
-          if (resultsFake && resultsFake.includes(`>${fakeValue_results}<`)) {
-            cell.innerHTML = resultsFake;
-          } else {
-            const originDom = cell.innerHTML;
-            let fakeDom = originDom
-            const regex = /—|\d+(\.\d+)?/;
-            if (regex.test(cell.textContent)) {
-              if (
-                cell.textContent.charAt(0) === "—"
-              ) {
-                fakeDom = originDom.replace(/>—</, `>${fakeValue_results}<`);
-              } else {
-                fakeDom = originDom.replace(/>(\d+(\.\d+)?)</, `>${fakeValue_results}<`);
-              }
-              cell.innerHTML = fakeDom;
-              resultsFake = fakeDom;
-            }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.COST_PER_RESULT:
-        case CONSTANT.COLUMN_NAMES_EN.COST_PER_RESULT:
-          const fakeValue_costPerResult = options[rowIndex].results === "_" ? "—" : convertToVND((options[rowIndex].spent / options[rowIndex].results).toFixed(2))
-          if (costPerResultFake && costPerResultFake.includes(`>${fakeValue_costPerResult}<`)) {
-            cell.innerHTML = costPerResultFake;
-          } else {
-            const originDom = cell.innerHTML;
-            let fakeDom = originDom
-            const regex = /—|\d+(\.\d+)?/;
-            if (regex.test(cell.textContent)) {
-              if (
-                cell.textContent.charAt(0) === "—"
-              ) {
-                fakeDom = originDom.replace(/>—</, `>${fakeValue_costPerResult}<`);
-              } else {
-                fakeDom = originDom.replace(/<span class="_3dfi _3dfj">[^<]*<\/span>/, `<span class="_3dfi _3dfj">${fakeValue_costPerResult}</span>`);
-              }
+            switch (dictHeader[columnName]) {
+                case CONSTANT.COLUMN_NAMES.RESULTS:
+                case CONSTANT.COLUMN_NAMES_EN.RESULTS:
+                    const fakeValue_results = options[rowIndex].results === "_" ? "—" : options[rowIndex].results.toLocaleString("vi-VN")
+                    if (resultsFake && resultsFake.includes(`>${fakeValue_results}<`)) {
+                        cell.innerHTML = resultsFake;
+                    } else {
+                        const originDom = cell.innerHTML;
+                        let fakeDom = originDom
+                        const regex = /—|\\d+(\\.\\d+)?/;
+                        if (regex.test(cell.textContent)) {
+                            if (
+                                cell.textContent.charAt(0) === "—"
+                            ) {
+                                fakeDom = originDom.replace(/>—</, `>${fakeValue_results}<`);
+                            } else {
+                                fakeDom = originDom.replace(/>(\\d+(\\.\\d+)?)</, `>${fakeValue_results}<`);
+                            }
+                            cell.innerHTML = fakeDom;
+                            resultsFake = fakeDom;
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.COST_PER_RESULT:
+                case CONSTANT.COLUMN_NAMES_EN.COST_PER_RESULT:
+                    const fakeValue_costPerResult = options[rowIndex].results === "_" ? "—" : convertToVND((options[rowIndex].spent / options[rowIndex].results).toFixed(2))
+                    if (costPerResultFake && costPerResultFake.includes(`>${fakeValue_costPerResult}<`)) {
+                        cell.innerHTML = costPerResultFake;
+                    } else {
+                        const originDom = cell.innerHTML;
+                        let fakeDom = originDom
+                        const regex = /—|\\d+(\\.\\d+)?/;
+                        if (regex.test(cell.textContent)) {
+                            if (
+                                cell.textContent.charAt(0) === "—"
+                            ) {
+                                fakeDom = originDom.replace(/>—</, `>${fakeValue_costPerResult}<`);
+                            } else {
+                                fakeDom = originDom.replace(/<span class="_3dfi _3dfj">[^<]*<\\/span>/, `<span class="_3dfi _3dfj">${fakeValue_costPerResult}</span>`);
+                            }
 
-              cell.innerHTML = fakeDom;
-              costPerResultFake = fakeDom;
+                            cell.innerHTML = fakeDom;
+                            costPerResultFake = fakeDom;
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.SPENT:
+                case CONSTANT.COLUMN_NAMES_EN.SPENT:
+                    const fakeValue_spent = options[rowIndex].spent === "_" ? "—" : convertToVND(options[rowIndex].spent)
+                    if (spentFake && spentFake.includes(`>${fakeValue_spent}<`)) {
+                        cell.innerHTML = spentFake;
+                    } else {
+                        const originDom = cell.innerHTML;
+                        let fakeDom = originDom
+                        const regex = /—|\\d+(\\.\\d+)?/;
+                        if (regex.test(cell.textContent)) {
+                            if (
+                                cell.textContent.charAt(0) === "—"
+                            ) {
+                                fakeDom = originDom.replace(/>—</, `>${fakeValue_spent}<`);
+                            } else {
+                                fakeDom = originDom.replace(/<span class="_3dfi _3dfj">[^<]*<\\/span>/, `<span class="_3dfi _3dfj">${fakeValue_spent}</span>`);
+                            }
+                            cell.innerHTML = fakeDom;
+                            spentFake = fakeDom;
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.REACH:
+                case CONSTANT.COLUMN_NAMES_EN.REACH:
+                    if (cell.textContent === "—") {
+                        const reachEl = cell.querySelector(".xt0psk2");
+                        if (reachEl) {
+                            if (options[rowIndex].reach === "_") {
+                            } else {
+                                if (reachEl.textContent !== options[rowIndex].reach.toLocaleString("vi-VN"))
+                                    reachEl.textContent =
+                                        options[rowIndex].reach.toLocaleString("vi-VN");
+                            }
+                        }
+                    } else {
+                        const reachEl = [...cell.querySelectorAll("span")].findLast(el => !el.querySelector("span"));
+                        if (reachEl) {
+                            if (options[rowIndex].reach === "_") {
+                                reachEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
+                            } else {
+                                if (reachEl.textContent !== options[rowIndex].reach.toLocaleString("vi-VN"))
+                                    reachEl.textContent =
+                                        options[rowIndex].reach.toLocaleString("vi-VN");
+                            }
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.VIEWS:
+                case CONSTANT.COLUMN_NAMES_EN.VIEWS:
+                    const fakeValue_views = options[rowIndex].views === "_" ? "—" : options[rowIndex].views.toLocaleString("vi-VN")
+                    if (viewsFake && viewsFake.includes(`>${fakeValue_views}<`)) {
+                        cell.innerHTML = viewsFake;
+                    } else {
+                        const originDom = cell.innerHTML;
+                        let fakeDom = originDom
+                        const regex = /—|\\d+(\\.\\d+)?/;
+                        if (regex.test(cell.textContent)) {
+                            if (
+                                cell.textContent.charAt(0) === "—"
+                            ) {
+                                fakeDom = originDom.replace(/>—</, `>${fakeValue_views}<`);
+                            } else {
+                                fakeDom = originDom.replace(/>(\\d+(\\.\\d+)?)</, `>${fakeValue_views}<`);
+                            }
+                            cell.innerHTML = fakeDom;
+                            viewsFake = fakeDom;
+                        }
+                    }
             }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.SPENT:
-        case CONSTANT.COLUMN_NAMES_EN.SPENT:
-          const fakeValue_spent = options[rowIndex].spent === "_" ? "—" : convertToVND(options[rowIndex].spent)
-          if (spentFake && spentFake.includes(`>${fakeValue_spent}<`)) {
-            cell.innerHTML = spentFake;
-          } else {
-            const originDom = cell.innerHTML;
-            let fakeDom = originDom
-            const regex = /—|\d+(\.\d+)?/;
-            if (regex.test(cell.textContent)) {
-              if (
-                cell.textContent.charAt(0) === "—"
-              ) {
-                fakeDom = originDom.replace(/>—</, `>${fakeValue_spent}<`);
-              } else {
-                fakeDom = originDom.replace(/<span class="_3dfi _3dfj">[^<]*<\/span>/, `<span class="_3dfi _3dfj">${fakeValue_spent}</span>`);
-              }
-              cell.innerHTML = fakeDom;
-              spentFake = fakeDom;
+        }
+        cells.forEach((cell, index) => {
+            const columnName = cell.style.left;
+            const rowIndex = Math.floor(index / numCellsOnRow);
+            if (!options[rowIndex] || Object.keys(options[rowIndex]).length === 0)
+                return;
+            if (rowIndex > options.length - 2) return;
+            switch (dictHeader[columnName]) {
+                case CONSTANT.COLUMN_NAMES.COST_PER_RESULT:
+                case CONSTANT.COLUMN_NAMES_EN.COST_PER_RESULT:
+                    if (cell.textContent.charAt(0) === "—") {
+                        const costPerResultEl = cell.querySelector(".xt0psk2");
+                        if (costPerResultEl) {
+                            if (
+                                options[rowIndex].results === "_" ||
+                                options[rowIndex].spent === "_"
+                            ) {
+                            } else {
+                                if (costPerResultEl.textContent !== convertToVND(
+                                    (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
+                                ))
+                                    costPerResultEl.textContent = convertToVND(
+                                        (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
+                                    );
+                            }
+                        }
+                    } else {
+                        const costPerResultEl = cell.querySelector("._3dfi._3dfj");
+                        if (costPerResultEl) {
+                            if (
+                                options[rowIndex].results === "_" ||
+                                options[rowIndex].spent === "_"
+                            ) {
+                                costPerResultEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span><span class="_3dfi _3dfj">—</span></span></div>`;
+                            } else {
+                                if (costPerResultEl.textContent !== convertToVND(
+                                    (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
+                                ))
+                                    costPerResultEl.textContent = convertToVND(
+                                        (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
+                                    );
+                            }
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.SPENT:
+                case CONSTANT.COLUMN_NAMES_EN.SPENT:
+                    if (cell.textContent.charAt(0) === "—") {
+                        const spentEl = cell.querySelector(".xt0psk2");
+                        if (spentEl) {
+                            if (options[rowIndex].spent === "_") {
+                            } else {
+                                if (spentEl.textContent !== convertToVND(options[rowIndex].spent))
+                                    spentEl.textContent = convertToVND(options[rowIndex].spent);
+                            }
+                        }
+                    } else {
+                        const spentEl = cell.querySelector("._3dfi._3dfj");
+                        if (spentEl) {
+                            if (options[rowIndex].spent === "_") {
+                                spentEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span class="_3dfi _3dfj">—</span></div>`;
+                            } else {
+                                if (spentEl.textContent !== convertToVND(options[rowIndex].spent))
+                                    spentEl.textContent = convertToVND(options[rowIndex].spent);
+                            }
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.REACH:
+                case CONSTANT.COLUMN_NAMES_EN.REACH:
+                    if (cell.textContent === "—") {
+                        const reachEl = cell.querySelector(".xt0psk2");
+                        if (reachEl) {
+                            if (options[rowIndex].reach === "_") {
+                            } else {
+                                if (reachEl.textContent !== options[rowIndex].reach.toLocaleString("vi-VN"))
+                                    reachEl.textContent =
+                                        options[rowIndex].reach.toLocaleString("vi-VN");
+                            }
+                        }
+                    } else {
+                        const reachEl = cell.querySelector("span");
+                        if (reachEl) {
+                            if (options[rowIndex].reach === "_") {
+                                reachEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
+                            } else {
+                                if (reachEl.textContent !== options[rowIndex].reach.toLocaleString("vi-VN"))
+                                    reachEl.textContent =
+                                        options[rowIndex].reach.toLocaleString("vi-VN");
+                            }
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.RESULTS:
+                case CONSTANT.COLUMN_NAMES_EN.RESULTS:
+                    if (cell.textContent.charAt(0) === "—") {
+                        const resultEl = cell.querySelector(".xt0psk2");
+                        if (resultEl) {
+                            if (options[rowIndex].results === "_") {
+                            } else {
+                                console.log(resultEl, options[rowIndex].results.toLocaleString("vi-VN"))
+                                resultEl.textContent = options[rowIndex].results.toLocaleString("vi-VN");
+                            }
+                        }
+                    } else {
+                        let resultEl = cell.querySelector("._6g3g._9mk- ._7el8");
+                        if (!resultEl) {
+                            resultEl = cell.querySelector(".xmi5d70")
+                        }
+                        if (!resultEl) {
+                            resultEl = cell.querySelector("._7el8._as5y")
+                        }
+                        if (!resultEl) {
+                            resultEl = cell.querySelector(".xo1l8bm.x10wlt62.xlyipyv")
+                        }
+                        if (resultEl) {
+                            if (options[rowIndex].results === "_") {
+                                resultEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class="_7el8 _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj">—</div>`;
+                            } else {
+                                resultEl.textContent =
+                                    options[rowIndex].results.toLocaleString("vi-VN");
+                            }
+                        }
+                    }
+                    break;
+                case CONSTANT.COLUMN_NAMES.VIEWS:
+                case CONSTANT.COLUMN_NAMES_EN.VIEWS:
+                    if (cell.textContent === "—") {
+                        const viewEl = cell.querySelector(".xt0psk2");
+                        if (viewEl) {
+                            if (options[rowIndex].views === "_") {
+                            } else {
+                                if (viewEl.textContent !== options[rowIndex].views.toLocaleString("vi-VN"))
+                                    viewEl.textContent =
+                                        options[rowIndex].views.toLocaleString("vi-VN");
+                            }
+                        }
+                    } else {
+                        const viewEl = cell.querySelector("span");
+                        if (viewEl) {
+                            if (options[rowIndex].views === "_") {
+                                viewEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
+                            } else {
+                                if (viewEl.textContent !== options[rowIndex].views.toLocaleString("vi-VN"))
+                                    viewEl.textContent =
+                                        options[rowIndex].views.toLocaleString("vi-VN");
+                            }
+                        }
+                    }
             }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.REACH:
-        case CONSTANT.COLUMN_NAMES_EN.REACH:
-          const fakeValue_reach = options[rowIndex].reach === "_" ? "—" : options[rowIndex].reach.toLocaleString("vi-VN")
-          if (reachFake && reachFake.includes(`>${fakeValue_reach}<`)) {
-            cell.innerHTML = reachFake;
-          } else {
-            const originDom = cell.innerHTML;
-            let fakeDom = originDom
-            const regex = /—|\d+(\.\d+)?/;
-            if (regex.test(cell.textContent)) {
-              if (
-                cell.textContent.charAt(0) === "—"
-              ) {
-                fakeDom = originDom.replace(/>—</, `>${fakeValue_reach}<`);
-              } else {
-                fakeDom = originDom.replace(/>(\d+(\.\d+)?)</, `>${fakeValue_reach}<`);
-              }
-              cell.innerHTML = fakeDom;
-              reachFake = fakeDom;
-            }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.VIEWS:
-        case CONSTANT.COLUMN_NAMES_EN.VIEWS:
-          const fakeValue_views = options[rowIndex].views === "_" ? "—" : options[rowIndex].views.toLocaleString("vi-VN")
-          if (viewsFake && viewsFake.includes(`>${fakeValue_views}<`)) {
-            cell.innerHTML = viewsFake;
-          } else {
-            const originDom = cell.innerHTML;
-            let fakeDom = originDom
-            const regex = /—|\d+(\.\d+)?/;
-            if (regex.test(cell.textContent)) {
-              if (
-                cell.textContent.charAt(0) === "—"
-              ) {
-                fakeDom = originDom.replace(/>—</, `>${fakeValue_views}<`);
-              } else {
-                fakeDom = originDom.replace(/>(\d+(\.\d+)?)</, `>${fakeValue_views}<`);
-              }
-              cell.innerHTML = fakeDom;
-              viewsFake = fakeDom;
-            }
-          }
-      }
+        });
+        removeOverlay();
+    } catch {
+
+    } finally {
+
     }
-    cells.forEach((cell, index) => {
-      const columnName = cell.style.left;
-      const rowIndex = Math.floor(index / numCellsOnRow);
-      if (!options[rowIndex] || Object.keys(options[rowIndex]).length === 0)
-        return;
-      if (rowIndex > options.length - 2) return;
-      switch (dictHeader[columnName]) {
-        case CONSTANT.COLUMN_NAMES.COST_PER_RESULT:
-        case CONSTANT.COLUMN_NAMES_EN.COST_PER_RESULT:
-          if (cell.textContent.charAt(0) === "—") {
-            const costPerResultEl = cell.querySelector(".xt0psk2");
-            if (costPerResultEl) {
-              if (
-                options[rowIndex].results === "_" ||
-                options[rowIndex].spent === "_"
-              ) {
-              } else {
-                if (costPerResultEl.textContent !== convertToVND(
-                  (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
-                ))
-                  costPerResultEl.textContent = convertToVND(
-                    (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
-                  );
-              }
-            }
-          } else {
-            const costPerResultEl = cell.querySelector("._3dfi._3dfj");
-            if (costPerResultEl) {
-              if (
-                options[rowIndex].results === "_" ||
-                options[rowIndex].spent === "_"
-              ) {
-                costPerResultEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span><span class="_3dfi _3dfj">—</span></span></div>`;
-              } else {
-                if (costPerResultEl.textContent !== convertToVND(
-                  (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
-                ))
-                  costPerResultEl.textContent = convertToVND(
-                    (options[rowIndex].spent / options[rowIndex].results).toFixed(2)
-                  );
-              }
-            }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.SPENT:
-        case CONSTANT.COLUMN_NAMES_EN.SPENT:
-          if (cell.textContent.charAt(0) === "—") {
-            const spentEl = cell.querySelector(".xt0psk2");
-            if (spentEl) {
-              if (options[rowIndex].spent === "_") {
-              } else {
-                if (spentEl.textContent !== convertToVND(options[rowIndex].spent))
-                  spentEl.textContent = convertToVND(options[rowIndex].spent);
-              }
-            }
-          } else {
-            const spentEl = cell.querySelector("._3dfi._3dfj");
-            if (spentEl) {
-              if (options[rowIndex].spent === "_") {
-                spentEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span class="_3dfi _3dfj">—</span></div>`;
-              } else {
-                if (spentEl.textContent !== convertToVND(options[rowIndex].spent))
-                  spentEl.textContent = convertToVND(options[rowIndex].spent);
-              }
-            }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.REACH:
-        case CONSTANT.COLUMN_NAMES_EN.REACH:
-          if (cell.textContent === "—") {
-            const reachEl = cell.querySelector(".xt0psk2");
-            if (reachEl) {
-              if (options[rowIndex].reach === "_") {
-              } else {
-                if (reachEl.textContent !== options[rowIndex].reach.toLocaleString("vi-VN"))
-                  reachEl.textContent =
-                    options[rowIndex].reach.toLocaleString("vi-VN");
-              }
-            }
-          } else {
-            const reachEl = cell.querySelector("span");
-            if (reachEl) {
-              if (options[rowIndex].reach === "_") {
-                reachEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
-              } else {
-                if (reachEl.textContent !== options[rowIndex].reach.toLocaleString("vi-VN"))
-                  reachEl.textContent =
-                    options[rowIndex].reach.toLocaleString("vi-VN");
-              }
-            }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.RESULTS:
-        case CONSTANT.COLUMN_NAMES_EN.RESULTS:
-          if (cell.textContent.charAt(0) === "—") {
-            const resultEl = cell.querySelector(".xt0psk2");
-            if (resultEl) {
-              if (options[rowIndex].results === "_") {
-              } else {
-                resultEl.textContent = options[rowIndex].results.toLocaleString("vi-VN");
-              }
-            }
-          } else {
-            let resultEl = cell.querySelector("._6g3g._9mk- ._7el8");
-            if (!resultEl) {
-              resultEl = cell.querySelector(".xmi5d70")
-            }
-            if (!resultEl) {
-              resultEl = cell.querySelector("._7el8._as5y")
-            }
-            if (!resultEl) {
-              resultEl = cell.querySelector(".xo1l8bm.x10wlt62.xlyipyv")
-            }
-            if (resultEl) {
-              if (options[rowIndex].results === "_") {
-                resultEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class="_7el8 _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj">—</div>`;
-              } else {
-                resultEl.textContent =
-                  options[rowIndex].results.toLocaleString("vi-VN");
-              }
-            }
-          }
-          break;
-        case CONSTANT.COLUMN_NAMES.VIEWS:
-        case CONSTANT.COLUMN_NAMES_EN.VIEWS:
-          if (cell.textContent === "—") {
-            const viewEl = cell.querySelector(".xt0psk2");
-            if (viewEl) {
-              if (options[rowIndex].views === "_") {
-              } else {
-                if (viewEl.textContent !== options[rowIndex].views.toLocaleString("vi-VN"))
-                  viewEl.textContent =
-                    options[rowIndex].views.toLocaleString("vi-VN");
-              }
-            }
-          } else {
-            const viewEl = cell.querySelector("span");
-            if (viewEl) {
-              if (options[rowIndex].views === "_") {
-                viewEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
-              } else {
-                if (viewEl.textContent !== options[rowIndex].views.toLocaleString("vi-VN"))
-                  viewEl.textContent =
-                    options[rowIndex].views.toLocaleString("vi-VN");
-              }
-            }
-          }
-      }
-    });
-    removeOverlay();
-  } catch (e) {
-    console.log("error", e);
-  } finally {
-    removeOverlay();
-  }
 };
+
+function autoCleanClickEvents(parentSelector, childSelector, callback) {
+    try {
+        const parent = typeof parentSelector === 'string'
+            ? document.querySelector(parentSelector)
+            : parentSelector;
+
+        if (!parent) {
+            console.warn('Parent not found:', parentSelector);
+            return;
+        }
+
+        const cleanClickEvents = (child) => {
+            if (child._hasCleaned !== true) {
+                const cleanChild = child.cloneNode(true);
+                cleanChild._hasCleaned = true;
+                cleanChild.addEventListener("click", callback);
+                child.replaceWith(cleanChild);
+            }
+        };
+
+        parent.querySelectorAll(childSelector).forEach(cleanClickEvents);
+
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach((node) => {
+                        if (!node.nodeType === Node.ELEMENT_NODE) return;
+
+                        if (node.matches && node.matches(childSelector)) {
+                            cleanClickEvents(node);
+                        }
+
+                        if (node.querySelectorAll) {
+                            node.querySelectorAll(childSelector).forEach(cleanClickEvents);
+                        }
+                    });
+                }
+            }
+        });
+
+        observer.observe(parent, {
+            childList: true,
+            subtree: true
+        });
+
+        return () => observer.disconnect();
+    } catch {
+
+    }
+}
 """.replace("${__CAMPAIGNS__}", campaigns_json).replace("${__ADSETS__}", adsets_json).replace("${__ADS__}", ads_json)
 
 with sync_playwright() as p:

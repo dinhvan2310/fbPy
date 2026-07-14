@@ -1,3 +1,27 @@
-/.venv
-/dist
-/dist.rar
+# Virtual env
+.venv/
+venv/
+env/
+
+# PyInstaller / build artifacts
+build/
+dist/
+*.egg-info/
+*.spec.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Local runtime / backups
+chrome-profile/
+data.json.backup
+*.backup
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.rar
+*.zip
