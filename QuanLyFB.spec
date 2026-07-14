@@ -40,7 +40,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='FBvoi',
+    name='QuanLyFB',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

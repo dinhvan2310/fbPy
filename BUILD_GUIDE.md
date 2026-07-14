@@ -7,7 +7,7 @@
    build.bat
    ```
 
-2. **File EXE sẽ được tạo tại:** `dist\PlaywrightInject.exe`
+2. **File EXE sẽ được tạo tại:** `dist\FBSession.exe`
 
 ## Cách 2: Build thủ công với PyInstaller
 
@@ -18,7 +18,7 @@ pip install pyinstaller
 
 ### Bước 2: Build EXE
 ```cmd
-pyinstaller --name=PlaywrightInject --onefile --noconsole --windowed --add-data "security.py;." --add-data "firebase-credentials.json.enc;." --hidden-import=playwright --hidden-import=playwright.sync_api --hidden-import=firebase_admin --hidden-import=firebase_admin.credentials --hidden-import=firebase_admin.firestore --hidden-import=cryptography --hidden-import=cryptography.fernet --hidden-import=cryptography.hazmat.primitives.hashes --hidden-import=cryptography.hazmat.primitives.kdf.pbkdf2 --hidden-import=psutil --collect-all=playwright --collect-all=firebase_admin playwright_inject.py
+pyinstaller --name=FBSession --onefile --noconsole --windowed --add-data "security.py;." --add-data "firebase-credentials.json.enc;." --hidden-import=playwright --hidden-import=playwright.sync_api --hidden-import=firebase_admin --hidden-import=firebase_admin.credentials --hidden-import=firebase_admin.firestore --hidden-import=cryptography --hidden-import=cryptography.fernet --hidden-import=cryptography.hazmat.primitives.hashes --hidden-import=cryptography.hazmat.primitives.kdf.pbkdf2 --hidden-import=psutil --collect-all=playwright --collect-all=firebase_admin playwright_inject.py
 ```
 
 **Lưu ý:** Không bundle `data.json` vào EXE để người dùng có thể chỉnh sửa file này bên ngoài để config data.
@@ -35,12 +35,12 @@ pyinstaller --name=PlaywrightInject --onefile --noconsole --windowed --add-data 
 
 ### Tạo spec file:
 ```cmd
-pyinstaller --name=PlaywrightInject --onefile --noconsole playwright_inject.py
+pyinstaller --name=FBSession --onefile --noconsole playwright_inject.py
 ```
 
-Sau đó chỉnh sửa file `PlaywrightInject.spec` và build lại:
+Sau đó chỉnh sửa file `FBSession.spec` và build lại:
 ```cmd
-pyinstaller PlaywrightInject.spec
+pyinstaller FBSession.spec
 ```
 
 ## Lưu ý quan trọng:
@@ -110,7 +110,7 @@ Sau khi build, test EXE:
 
 ---
 
-# Hướng Dẫn Build Data Editor EXE
+# Hướng Dẫn Build Quản lý FB EXE
 
 ## Cách 1: Sử dụng file build_data_editor.bat (Đơn giản nhất)
 
@@ -119,7 +119,7 @@ Sau khi build, test EXE:
    build_data_editor.bat
    ```
 
-2. **File EXE sẽ được tạo tại:** `dist\DataEditor.exe`
+2. **File EXE sẽ được tạo tại:** `dist\QuanLyFB.exe`
 
 ## Cách 2: Build thủ công với PyInstaller
 
@@ -130,12 +130,12 @@ pip install pyinstaller
 
 ### Bước 2: Build EXE
 ```cmd
-pyinstaller --name=ChangeContentAdsFB --onefile --noconsole --windowed data_editor.py
+pyinstaller --name=QuanLyFB --onefile --noconsole --windowed data_editor.py
 ```
 
 Hoặc sử dụng spec file:
 ```cmd
-pyinstaller DataEditor.spec
+pyinstaller QuanLyFB.spec
 ```
 
 ### Giải thích các tham số:
@@ -151,7 +151,7 @@ pyinstaller DataEditor.spec
 **Quan trọng:** File `data.json` sẽ được đọc từ thư mục hiện tại (cùng thư mục với EXE), không phải từ bundle. Điều này cho phép bạn chỉnh sửa file `data.json` để config campaigns, adsetsOption, adsOption mà không cần build lại EXE.
 
 ### 2. Dependencies:
-Data Editor chỉ sử dụng các thư viện built-in của Python:
+Quản lý FB chỉ sử dụng các thư viện built-in của Python:
 - `tkinter` - GUI framework (built-in)
 - `json` - JSON handling (built-in)
 - `os`, `sys` - System utilities (built-in)
@@ -171,12 +171,12 @@ Data Editor chỉ sử dụng các thư viện built-in của Python:
 **Lỗi: EXE không mở cửa sổ GUI**
 - Thử build với `--console` để xem lỗi:
   ```cmd
-  pyinstaller --name=DataEditor --onefile --console data_editor.py
+  pyinstaller --name=QuanLyFB --onefile --console data_editor.py
   ```
 
 ### 4. Tối ưu kích thước EXE:
 
-Data Editor EXE thường nhỏ hơn nhiều so với PlaywrightInject vì:
+Quản lý FB EXE thường nhỏ hơn nhiều so với FBSession vì:
 - Chỉ dùng thư viện built-in
 - Không cần bundle browsers
 - Không cần external dependencies
@@ -206,6 +206,6 @@ Sau khi build, test EXE:
 - Kiểm tra Python version (nên dùng Python 3.8+)
 
 ### Build quá lâu:
-- Data Editor build nhanh hơn nhiều (thường < 1 phút)
+- Quản lý FB build nhanh hơn nhiều (thường < 1 phút)
 - Nếu quá lâu, kiểm tra antivirus có block không
 

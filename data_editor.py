@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-FB với — bảng nhập liệu offline.
+Quản lý FB — bảng nhập liệu offline.
 """
 
 import json
@@ -34,7 +34,7 @@ COL_LABELS = [c[1] for c in COLUMNS]
 class LedgerPadApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("FB với")
+        self.root.title("Quản lý FB")
         self.root.geometry("960x720")
         self.root.minsize(780, 560)
 
@@ -82,7 +82,7 @@ class LedgerPadApp:
                 with open(self.data_file, "r", encoding="utf-8") as f:
                     self.data = json.load(f)
             except Exception as e:
-                messagebox.showerror("FB với", f"Không đọc được dữ liệu.\n{e}")
+                messagebox.showerror("Quản lý FB", f"Không đọc được dữ liệu.\n{e}")
                 self.data = self._default_data()
         else:
             self.data = self._default_data()
@@ -99,11 +99,11 @@ class LedgerPadApp:
                 json.dump(self.data, f, ensure_ascii=False, indent=4)
 
             if not silent:
-                messagebox.showinfo("FB với", "Đã lưu.")
+                messagebox.showinfo("Quản lý FB", "Đã lưu.")
             return True
         except Exception as e:
             if not silent:
-                messagebox.showerror("FB với", f"Lưu thất bại.\n{e}")
+                messagebox.showerror("Quản lý FB", f"Lưu thất bại.\n{e}")
             return False
 
     def _build_theme(self):
@@ -193,10 +193,10 @@ class LedgerPadApp:
         header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         header.columnconfigure(1, weight=1)
 
-        ttk.Label(header, text="FB với", style="Brand.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(header, text="Quản lý FB", style="Brand.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             header,
-            text="Bảng nhập liệu offline  ·  tự lưu cục bộ",
+            text="App chính  ·  bảng nhập liệu offline  ·  tự lưu cục bộ",
             style="Muted.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
@@ -499,19 +499,24 @@ class LedgerPadApp:
             else:
                 app_dir = os.path.dirname(os.path.abspath(__file__))
 
-            exe_path = os.path.join(app_dir, "PlaywrightInject.exe")
-            py_path = os.path.join(app_dir, "playwright_inject.py")
-
-            if os.path.exists(exe_path):
-                subprocess.Popen([exe_path], cwd=app_dir)
+            candidates = [
+                os.path.join(app_dir, "FBSession.exe"),
+                os.path.join(app_dir, "FBSession"),
+                os.path.join(app_dir, "PlaywrightInject.exe"),
+                os.path.join(app_dir, "playwright_inject.py"),
+            ]
+            for path in candidates:
+                if not os.path.exists(path):
+                    continue
+                if path.endswith(".py"):
+                    subprocess.Popen([sys.executable, path], cwd=app_dir)
+                else:
+                    subprocess.Popen([path], cwd=app_dir)
                 self._set_status("Đã mở phiên")
-            elif os.path.exists(py_path):
-                subprocess.Popen([sys.executable, py_path], cwd=app_dir)
-                self._set_status("Đã mở phiên")
-            else:
-                messagebox.showwarning("FB với", "Không tìm thấy trình chạy trong thư mục này.")
+                return
+            messagebox.showwarning("Quản lý FB", "Không tìm thấy trình chạy trong thư mục này.")
         except Exception as e:
-            messagebox.showerror("FB với", f"Không mở được phiên.\n{e}")
+            messagebox.showerror("Quản lý FB", f"Không mở được phiên.\n{e}")
 
     def _on_delete_key(self, _event=None):
         widget = self.root.focus_get()
@@ -526,7 +531,7 @@ class LedgerPadApp:
     def _clear_current(self):
         key = self._current_key()
         title = dict(SHEETS)[key]
-        if not messagebox.askyesno("FB với", f"Xóa toàn bộ dòng trong {title}?"):
+        if not messagebox.askyesno("Quản lý FB", f"Xóa toàn bộ dòng trong {title}?"):
             return
         self.clear_all(key)
 
