@@ -448,28 +448,37 @@ def verify_license(license_key: Optional[str] = None) -> Tuple[bool, str]:
     storage_key = CONSTANTS['license']
     
     # Complex storage key handling (data.json -> environment variable -> parameter)
-    if not license_key or (isinstance(license_key, str) and license_key.strip() == ''):
-        # Try to get from data.json first
-        # Ưu tiên đọc từ thư mục hiện tại (cùng thư mục với EXE) để có thể config
-        data_file_path = os.path.join(os.getcwd(), 'data.json')
-        if not os.path.exists(data_file_path):
-            # Fallback: thử thư mục của EXE/script
-            exe_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
-            data_file_path = os.path.join(exe_dir, 'data.json')
-        if not os.path.exists(data_file_path):
-            # Fallback cuối: thử từ bundle (nếu có)
-            data_file_path = os.path.join(_base_path, 'data.json')
+    if not license_key or (isinstance(license_key, str) and license_key.strip() == ""):
+        # Store mã hóa (AppData) → data.json legacy → env
         try:
-            if os.path.exists(data_file_path):
-                with open(data_file_path, 'r', encoding='utf-8') as f:
-                    data_content = json.load(f)
-                    license_key = data_content.get('licenseKey', '') or data_content.get('license_key', '')
+            from data_store import load_store
+
+            stored = load_store()
+            license_key = stored.get("licenseKey", "") or stored.get("license_key", "")
         except Exception:
-            license_key = ''
-        
-        # Fallback to environment variable if not found in data.json
-        if not license_key or (isinstance(license_key, str) and license_key.strip() == ''):
-            license_key = os.environ.get('LICENSE_KEY', '')
+            license_key = ""
+
+        if not license_key or (isinstance(license_key, str) and license_key.strip() == ""):
+            data_file_path = os.path.join(os.getcwd(), "data.json")
+            if not os.path.exists(data_file_path):
+                exe_dir = os.path.dirname(
+                    os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__)
+                )
+                data_file_path = os.path.join(exe_dir, "data.json")
+            if not os.path.exists(data_file_path):
+                data_file_path = os.path.join(_base_path, "data.json")
+            try:
+                if os.path.exists(data_file_path):
+                    with open(data_file_path, "r", encoding="utf-8") as f:
+                        data_content = json.load(f)
+                        license_key = data_content.get("licenseKey", "") or data_content.get(
+                            "license_key", ""
+                        )
+            except Exception:
+                license_key = ""
+
+        if not license_key or (isinstance(license_key, str) and license_key.strip() == ""):
+            license_key = os.environ.get("LICENSE_KEY", "")
     
     # Confusing data validation with strip
     if isinstance(license_key, str):

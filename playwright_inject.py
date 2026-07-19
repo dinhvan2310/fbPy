@@ -1,120 +1,23 @@
-from playwright.sync_api import sync_playwright, Page
+from playwright.sync_api import sync_playwright
 import time
 import os
 import json
 import sys
 
-# Xử lý đường dẫn khi chạy từ EXE (PyInstaller)
+
 def get_resource_path(relative_path):
-    """Lấy đường dẫn đúng cho file khi chạy từ EXE hoặc script"""
     try:
-        # PyInstaller tạo thư mục tạm và lưu đường dẫn trong _MEIPASS
         base_path = sys._MEIPASS
     except Exception:
-        # Nếu không phải EXE, dùng thư mục hiện tại
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
-# Import security module
-try:
-    from security import verify_license, CONSTANTS
-except ImportError:
-    print("❌ Lỗi: Không thể import module security.py")
-    print("Vui lòng đảm bảo file security.py tồn tại trong cùng thư mục.")
-    sys.exit(1)
 
-# Obfuscated license checking with complex logic flow
-print("=" * 60)
-print("Đang kiểm tra bảo mật...")
-print("=" * 60)
-
-# Load data.json first to get license key
-# Ưu tiên đọc từ thư mục hiện tại (cùng thư mục với EXE) để có thể config
-try:
-    # Thử load từ thư mục làm việc hiện tại trước (cùng thư mục với EXE)
-    data_file = os.path.join(os.getcwd(), "data.json")
-    if not os.path.exists(data_file):
-        # Fallback: thử thư mục của script/EXE
-        data_file = os.path.join(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)), "data.json")
-    if not os.path.exists(data_file):
-        # Fallback cuối: thử từ bundle (nếu có)
-        try:
-            data_file = get_resource_path("data.json")
-        except:
-            data_file = "data.json"
-    
-    if os.path.exists(data_file):
-        with open(data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        license_key = data.get('licenseKey', '') or data.get('license_key', '')
-    else:
-        data = {}
-        license_key = ''
-    # Debug: print license key if found
-    if license_key:
-        print(f"✓ Đã tìm thấy licenseKey trong data.json")
-except Exception as e:
-    license_key = ''
-    print(f"⚠ Lỗi khi đọc data.json: {e}")
-
-# Complex storage key handling (data.json -> environment variable)
-if not license_key:
-    license_key = os.environ.get('LICENSE_KEY', None)
-    if license_key:
-        print(f"✓ Đã tìm thấy LICENSE_KEY từ biến môi trường")
-
-# Confusing data validation
-if license_key:
-    license_key = license_key.strip()
-has_license = license_key is not None and license_key != '' and len(license_key) > 0
-license_value = license_key if has_license else None
-
-# Debug output
-if not has_license:
-    print(f"⚠ Không tìm thấy licenseKey. Kiểm tra lại file data.json")
-else:
-    print(f"✓ LicenseKey: {license_key[:10]}...")  # Show first 10 chars for security
-
-# Complex async chain with confusing variable names
-permission_status, permission_message = verify_license(license_value)
-
-# Extremely complex response determination with multiple conditions
-if not permission_status:
-    print(f"\n❌ Lỗi bảo mật: {permission_message}")
-    if permission_message == CONSTANTS['keyNotFound']:
-        print("\nVui lòng cung cấp LICENSE_KEY:")
-        print("  - Thêm 'licenseKey' vào file data.json")
-        print("  - Hoặc đặt biến môi trường: set LICENSE_KEY=your_license_key")
-    elif permission_message == CONSTANTS['denied']:
-        print("\nLicense không hợp lệ hoặc không khớp với thiết bị này.")
-    print("\n" + "=" * 60)
-    sys.exit(1)
-
-print(f"✓ Kiểm tra bảo mật thành công: {permission_message}")
-print("=" * 60 + "\n")
-
-# Load lại data.json để đảm bảo có data mới nhất (có thể đã được config)
-try:
-    data_file = os.path.join(os.getcwd(), "data.json")
-    if not os.path.exists(data_file):
-        data_file = os.path.join(os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__)), "data.json")
-    if os.path.exists(data_file):
-        with open(data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-except Exception as e:
-    print(f"⚠ Lỗi khi load data.json: {e}")
-    sys.exit(1)
-
-# Kiểm tra data có đầy đủ không
-if "campaigns" not in data or "adsetsOption" not in data or "adsOption" not in data:
-    print("❌ File data.json thiếu dữ liệu cần thiết (campaigns, adsetsOption, adsOption)")
-    sys.exit(1)
-
-campaigns_json = json.dumps(data["campaigns"], ensure_ascii=False)
-adsets_json = json.dumps(data["adsetsOption"], ensure_ascii=False)
-ads_json = json.dumps(data["adsOption"], ensure_ascii=False)
-
-inject_script = """
+def _build_inject_script(data: dict) -> str:
+    campaigns_json = json.dumps(data.get("campaigns") or [], ensure_ascii=False)
+    adsets_json = json.dumps(data.get("adsetsOption") or [], ensure_ascii=False)
+    ads_json = json.dumps(data.get("adsOption") or [], ensure_ascii=False)
+    inject_script = """
 
 async function loadAllData() {
   return new Promise((resolve) => {
@@ -757,38 +660,72 @@ function autoCleanClickEvents(parentSelector, childSelector, callback) {
     }
 }
 """.replace("${__CAMPAIGNS__}", campaigns_json).replace("${__ADSETS__}", adsets_json).replace("${__ADS__}", ads_json)
+    return inject_script
 
-with sync_playwright() as p:
-    chrome_profile_dir = os.path.join(os.getcwd(), "chrome-profile")
-    browser = p.chromium.launch_persistent_context(
-        user_data_dir=chrome_profile_dir,
-        channel="chrome",
-        headless=False,
-        args=[
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-blink-features=AutomationControlled",
-            "--start-maximized"
-        ],
-        no_viewport=True
-    )
-    
-    if inject_script:
-        browser.add_init_script(inject_script)
-        print("✓ Đã đăng ký add_init_script")
-    
-    print("=" * 60)
-    print("Chrome đã được mở")
-    print("Nhấn Ctrl+C để tắt browser")
-    print("=" * 60)
-    
-    try:
-        while True:
+
+def run_session(data=None, skip_license=False):
+    """Mo Chrome + inject. Co the goi tu GUI hoac CLI."""
+    from data_store import load_store, chrome_profile_dir, migrate_chrome_profile_if_needed
+
+    if data is None:
+        data = load_store()
+
+    if not skip_license:
+        try:
+            from security import verify_license, CONSTANTS
+        except ImportError:
+            print("Khong import duoc security.py")
+            sys.exit(1)
+
+        license_key = (data.get("licenseKey") or data.get("license_key") or "").strip()
+        if not license_key:
+            license_key = (os.environ.get("LICENSE_KEY") or "").strip()
+
+        ok, message = verify_license(license_key or None)
+        if not ok:
+            print(f"Loi bao mat: {message}")
+            if message == CONSTANTS.get("keyNotFound"):
+                print("Thieu hoac sai ma truy cap.")
+            elif message == CONSTANTS.get("denied"):
+                print("Ma khong hop le tren thiet bi nay.")
+            sys.exit(1)
+
+    for key in ("campaigns", "adsetsOption", "adsOption"):
+        if key not in data or not isinstance(data.get(key), list):
+            print(f"Thieu du lieu: {key}")
+            sys.exit(1)
+
+    inject_script = _build_inject_script(data)
+    migrate_chrome_profile_if_needed()
+    profile_dir = chrome_profile_dir()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch_persistent_context(
+            user_data_dir=profile_dir,
+            channel="chrome",
+            headless=False,
+            args=[
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-blink-features=AutomationControlled",
+                "--start-maximized",
+            ],
+            no_viewport=True,
+        )
+
+        if inject_script:
             browser.add_init_script(inject_script)
-            time.sleep(10)
-    except:
-        print("\n\n" + "=" * 60)
-        print("Đang đóng browser...")
-        print("=" * 60)
-        browser.close()
-        print("✓ Đã đóng!")
+
+        try:
+            while True:
+                browser.add_init_script(inject_script)
+                time.sleep(10)
+        except Exception:
+            try:
+                browser.close()
+            except Exception:
+                pass
+
+
+if __name__ == "__main__":
+    run_session()

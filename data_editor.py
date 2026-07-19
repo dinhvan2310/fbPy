@@ -4,13 +4,13 @@
 Quản lý FB — bảng nhập liệu offline.
 """
 
-import json
 import os
 import sys
 import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
+
+from data_store import load_store, save_store, store_path
 
 
 # Internal store keys stay unchanged; UI labels are deliberately neutral.
@@ -31,17 +31,43 @@ COL_KEYS = [c[0] for c in COLUMNS]
 COL_LABELS = [c[1] for c in COLUMNS]
 
 
+def _resource_path(*parts):
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, *parts)
+
+
+def _apply_window_icon(window):
+    for name in ("logo.ico", "logo.png"):
+        path = _resource_path(name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            window.iconbitmap(path)
+            return
+        except Exception:
+            try:
+                img = tk.PhotoImage(file=path)
+                window.iconphoto(True, img)
+                window._icon_image = img  # keep ref
+                return
+            except Exception:
+                continue
+
+
 class LedgerPadApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Quản lý FB")
         self.root.geometry("960x720")
         self.root.minsize(780, 560)
+        _apply_window_icon(self.root)
 
         self.trees = {}
-        self.data_file = self._find_store()
+        self.data_file = store_path()
         self.data = {}
-        self._status_after = None
         self._edit_entry = None
         self._edit_ctx = None
 
@@ -50,23 +76,11 @@ class LedgerPadApp:
         self.root.withdraw()
         self._build_ui()
         self._populate()
-        self._set_status("Sẵn sàng")
         self.root.after(50, self._ensure_access_code)
 
         self.root.bind("<Control-s>", lambda e: self.apply_batch())
         self.root.bind("<Control-Return>", lambda e: self.apply_batch())
         self.root.bind("<Delete>", self._on_delete_key)
-
-    def _find_store(self):
-        cwd = os.getcwd()
-        candidate = os.path.join(cwd, "data.json")
-        if os.path.exists(candidate):
-            return candidate
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        candidate = os.path.join(script_dir, "data.json")
-        if os.path.exists(candidate):
-            return candidate
-        return os.path.join(cwd, "data.json")
 
     def _default_data(self):
         return {
@@ -77,27 +91,16 @@ class LedgerPadApp:
         }
 
     def _load(self):
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, "r", encoding="utf-8") as f:
-                    self.data = json.load(f)
-            except Exception as e:
-                messagebox.showerror("Quản lý FB", f"Không đọc được dữ liệu.\n{e}")
-                self.data = self._default_data()
-        else:
+        try:
+            self.data = load_store()
+        except Exception as e:
+            messagebox.showerror("Quản lý FB", f"Không đọc được dữ liệu.\n{e}")
             self.data = self._default_data()
 
     def _save(self, silent=True):
         try:
-            if os.path.exists(self.data_file):
-                backup = self.data_file + ".backup"
-                with open(self.data_file, "r", encoding="utf-8") as src:
-                    with open(backup, "w", encoding="utf-8") as dst:
-                        dst.write(src.read())
-
-            with open(self.data_file, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=4)
-
+            if not save_store(self.data):
+                raise RuntimeError("Không ghi được store")
             if not silent:
                 messagebox.showinfo("Quản lý FB", "Đã lưu.")
             return True
@@ -194,14 +197,9 @@ class LedgerPadApp:
         header.columnconfigure(1, weight=1)
 
         ttk.Label(header, text="Quản lý FB", style="Brand.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(
-            header,
-            text="App chính  ·  bảng nhập liệu offline  ·  tự lưu cục bộ",
-            style="Muted.TLabel",
-        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
         actions = ttk.Frame(header)
-        actions.grid(row=0, column=2, rowspan=2, sticky="e")
+        actions.grid(row=0, column=2, sticky="e")
         ttk.Button(actions, text="Mở phiên", style="Accent.TButton", command=self.launch_session).pack(
             side=tk.RIGHT, padx=(8, 0)
         )
@@ -237,9 +235,10 @@ class LedgerPadApp:
         self._build_row_menu()
 
         # Paste strip
+        paste_hint = "|".join(COL_KEYS)
         paste_card = ttk.LabelFrame(
             shell,
-            text="  Dán hàng loạt   ·   Số lượng|Tổng|Phạm vi|Lượt  (mỗi dòng một bản ghi)  ",
+            text=f"  Dán hàng loạt   ·   {paste_hint}  (mỗi dòng một bản ghi)  ",
             padding=12,
         )
         paste_card.grid(row=2, column=0, sticky="nsew")
@@ -279,14 +278,6 @@ class LedgerPadApp:
         ttk.Button(paste_actions, text="Áp dụng", style="Accent.TButton", command=self.apply_batch).grid(
             row=0, column=1, sticky="e", padx=(12, 0)
         )
-        # Status bar
-        status = ttk.Frame(shell, style="Status.TFrame", padding=(10, 6))
-        status.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        status.columnconfigure(0, weight=1)
-        self.status_label = ttk.Label(status, text="", style="Status.TLabel")
-        self.status_label.grid(row=0, column=0, sticky="w")
-        self.path_label = ttk.Label(status, text="kho cục bộ", style="Status.TLabel")
-        self.path_label.grid(row=0, column=1, sticky="e")
 
     def _create_sheet(self, notebook, key, title):
         frame = ttk.Frame(notebook, padding=4)
@@ -374,12 +365,7 @@ class LedgerPadApp:
         self.row_count_label.config(text=f"{title}  ·  {n} dòng")
 
     def _set_status(self, message):
-        stamp = datetime.now().strftime("%H:%M:%S")
-        self.status_label.config(text=f"{message}  ·  {stamp}")
-        if self._status_after:
-            self.root.after_cancel(self._status_after)
-        self._status_after = self.root.after(4000, lambda: self.status_label.config(text=f"Sẵn sàng  ·  {stamp}"))
-
+        return
     def _populate(self):
         for key, tree in self.trees.items():
             for item in tree.get_children():
@@ -494,27 +480,15 @@ class LedgerPadApp:
 
     def launch_session(self):
         try:
+            self.autosave()
             if getattr(sys, "frozen", False):
-                app_dir = os.path.dirname(sys.executable)
+                cmd = [sys.executable, "--session"]
+                cwd = os.path.dirname(sys.executable)
             else:
-                app_dir = os.path.dirname(os.path.abspath(__file__))
-
-            candidates = [
-                os.path.join(app_dir, "FBSession.exe"),
-                os.path.join(app_dir, "FBSession"),
-                os.path.join(app_dir, "PlaywrightInject.exe"),
-                os.path.join(app_dir, "playwright_inject.py"),
-            ]
-            for path in candidates:
-                if not os.path.exists(path):
-                    continue
-                if path.endswith(".py"):
-                    subprocess.Popen([sys.executable, path], cwd=app_dir)
-                else:
-                    subprocess.Popen([path], cwd=app_dir)
-                self._set_status("Đã mở phiên")
-                return
-            messagebox.showwarning("Quản lý FB", "Không tìm thấy trình chạy trong thư mục này.")
+                cmd = [sys.executable, os.path.abspath(__file__), "--session"]
+                cwd = os.path.dirname(os.path.abspath(__file__))
+            subprocess.Popen(cmd, cwd=cwd)
+            self._set_status("Đã mở phiên Chrome")
         except Exception as e:
             messagebox.showerror("Quản lý FB", f"Không mở được phiên.\n{e}")
 
@@ -689,8 +663,10 @@ class AccessCodeDialog:
         self.dialog.title("Mã truy cập")
         self.dialog.geometry("420x220")
         self.dialog.minsize(380, 200)
-        self.dialog.transient(parent)
-        self.dialog.grab_set()
+        _apply_window_icon(self.dialog)
+        # Không transient khi parent đang withdraw — trên Windows dialog sẽ bị ẩn theo.
+        if parent.state() != "withdrawn":
+            self.dialog.transient(parent)
         self.dialog.configure(bg=colors.get("bg", "#f4f5f7"))
         if required:
             self.dialog.protocol("WM_DELETE_WINDOW", self._on_close_required)
@@ -699,6 +675,10 @@ class AccessCodeDialog:
         x = (self.dialog.winfo_screenwidth() // 2) - (self.dialog.winfo_width() // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (self.dialog.winfo_height() // 2)
         self.dialog.geometry(f"+{x}+{y}")
+        self.dialog.deiconify()
+        self.dialog.lift()
+        self.dialog.focus_force()
+        self.dialog.grab_set()
 
         frame = ttk.Frame(self.dialog, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
@@ -756,7 +736,14 @@ class AccessCodeDialog:
         self.dialog.destroy()
 
 
-def main():
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if "--session" in argv:
+        from playwright_inject import run_session
+
+        run_session(skip_license=False)
+        return
+
     root = tk.Tk()
     LedgerPadApp(root)
     root.mainloop()

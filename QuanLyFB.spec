@@ -1,10 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
+"""Một EXE duy nhất: Quản lý FB (GUI) + mở phiên Chrome (--session)."""
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('security.py', '.'), ('firebase-credentials.json.enc', '.')]
+datas = [
+    ('firebase-credentials.json.enc', '.'),
+    ('logo.png', '.'),
+    ('logo.ico', '.'),
+]
 binaries = []
 hiddenimports = [
-    'security',
     'firebase_admin',
     'firebase_admin.credentials',
     'firebase_admin.firestore',
@@ -13,8 +17,18 @@ hiddenimports = [
     'cryptography.hazmat.primitives.hashes',
     'cryptography.hazmat.primitives.kdf.pbkdf2',
     'psutil',
+    'security',
+    'data_store',
+    'playwright',
+    'playwright.sync_api',
 ]
+
 tmp_ret = collect_all('firebase_admin')
+datas += tmp_ret[0]
+binaries += tmp_ret[1]
+hiddenimports += tmp_ret[2]
+
+tmp_ret = collect_all('playwright')
 datas += tmp_ret[0]
 binaries += tmp_ret[1]
 hiddenimports += tmp_ret[2]
@@ -53,4 +67,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='logo.ico',
 )
