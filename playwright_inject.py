@@ -2,7 +2,10 @@ from playwright.sync_api import sync_playwright
 import time
 import os
 import json
+import math
+import re
 import sys
+from datetime import datetime
 
 
 def get_resource_path(relative_path):
@@ -13,20 +16,150 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
+_DATE_RANGE_KEY_RE = re.compile(r"^\d{8}-\d{8}$")
+_METRIC_KEYS = ("results", "spent", "reach", "views")
+
+
+def _normalize_metric_rows(value: list, preset_key: str, data_key: str) -> list:
+    rows = []
+    for index, raw_row in enumerate(value):
+        if not isinstance(raw_row, dict):
+            print(f"Bo qua dong {index + 1} cua {data_key} trong preset {preset_key}")
+            continue
+
+        row = {}
+        for metric_key in _METRIC_KEYS:
+            metric = raw_row.get(metric_key)
+            is_number = (
+                isinstance(metric, int)
+                and not isinstance(metric, bool)
+            ) or (isinstance(metric, float) and math.isfinite(metric))
+            if metric == "_" or is_number:
+                row[metric_key] = metric
+            else:
+                row = None
+                break
+
+        if row is None:
+            print(f"Bo qua dong {index + 1} cua {data_key} trong preset {preset_key}")
+            continue
+        rows.append(row)
+    return rows
+
+
+def _normalize_date_presets(data: dict) -> dict:
+    """Return valid date presets without breaking stores created by older builds."""
+    raw_presets = data.get("datePresets")
+    if raw_presets is None:
+        return {}
+    if not isinstance(raw_presets, dict):
+        print("Bo qua datePresets: du lieu phai la object")
+        return {}
+
+    normalized = {}
+    for raw_key, raw_preset in raw_presets.items():
+        key = str(raw_key).strip()
+        if not _DATE_RANGE_KEY_RE.fullmatch(key) or not isinstance(raw_preset, dict):
+            print(f"Bo qua preset ngay khong hop le: {raw_key}")
+            continue
+        try:
+            from_date = datetime.strptime(key[:8], "%Y%m%d").date()
+            to_date = datetime.strptime(key[9:], "%Y%m%d").date()
+            if from_date > to_date:
+                raise ValueError("from date is after to date")
+        except ValueError:
+            print(f"Bo qua preset ngay khong hop le: {raw_key}")
+            continue
+
+        preset = {}
+        for target_key, aliases in (
+            ("campaigns", ("campaigns",)),
+            ("adsetsOption", ("adsetsOption", "adsets")),
+            ("adsOption", ("adsOption", "ads")),
+        ):
+            value = next((raw_preset.get(alias) for alias in aliases if alias in raw_preset), None)
+            if isinstance(value, list):
+                preset[target_key] = _normalize_metric_rows(value, key, target_key)
+            elif value is not None:
+                print(f"Bo qua {target_key} trong preset {key}: du lieu phai la list")
+
+        normalized[key] = preset
+
+    return normalized
+
+
 def _build_inject_script(data: dict) -> str:
     campaigns_json = json.dumps(data.get("campaigns") or [], ensure_ascii=False)
     adsets_json = json.dumps(data.get("adsetsOption") or [], ensure_ascii=False)
     ads_json = json.dumps(data.get("adsOption") or [], ensure_ascii=False)
+    date_presets_json = json.dumps(_normalize_date_presets(data), ensure_ascii=False)
     inject_script = """
 
-async function loadAllData() {
-  return new Promise((resolve) => {
-    resolve({
-      campaignsOption: ${__CAMPAIGNS__},
-      adsetsOption: ${__ADSETS__},
-      adsOption: ${__ADS__}
-    })
-  })
+const defaultInjectedData = {
+  campaignsOption: ${__CAMPAIGNS__},
+  adsetsOption: ${__ADSETS__},
+  adsOption: ${__ADS__}
+};
+const injectedDatePresets = ${__DATE_PRESETS__};
+let activeRangeKey = null;
+let activeInjectedData = null;
+
+function parseDateRangeFromUrl(rawUrl) {
+  try {
+    const dateParam = new URL(rawUrl, document.location.origin).searchParams.get("date");
+    if (!dateParam) return null;
+
+    const [rangePart] = dateParam.split(",");
+    const [from, to] = (rangePart || "").split("_");
+    const validDate = /^\\d{4}-\\d{2}-\\d{2}$/;
+    if (!validDate.test(from || "") || !validDate.test(to || "")) return null;
+
+    const isRealDate = (value) => {
+      const parsed = new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    };
+    if (!isRealDate(from) || !isRealDate(to)) return null;
+
+    return `${from.replaceAll("-", "")}-${to.replaceAll("-", "")}`;
+  } catch (error) {
+    console.warn("Khong doc duoc khoang ngay tu URL:", error);
+    return null;
+  }
+}
+
+function resolveInjectedData(rangeKey) {
+  const preset = rangeKey ? injectedDatePresets[rangeKey] : null;
+  if (!preset || typeof preset !== "object") return defaultInjectedData;
+
+  const withFallback = (key) => (
+    Array.isArray(preset[key]) && preset[key].length > 0
+      ? preset[key]
+      : defaultInjectedData[key]
+  );
+  return {
+    campaignsOption: withFallback("campaigns"),
+    adsetsOption: withFallback("adsetsOption"),
+    adsOption: withFallback("adsOption")
+  };
+}
+
+function resetRenderCaches() {
+  resultsFake = '';
+  costPerResultFake = '';
+  spentFake = '';
+  reachFake = '';
+  viewsFake = '';
+}
+
+async function loadAllData(rawUrl = document.location.href) {
+  const rangeKey = parseDateRangeFromUrl(rawUrl);
+  const cacheKey = rangeKey || "__default__";
+  if (activeInjectedData === null || activeRangeKey !== cacheKey) {
+    activeRangeKey = cacheKey;
+    activeInjectedData = resolveInjectedData(rangeKey);
+    resetRenderCaches();
+  }
+  return activeInjectedData;
 }
 
 const overlay = document.createElement('div');
@@ -212,13 +345,13 @@ const intervalId = setInterval(() => {
 }, 5);
 
 window.navigation.addEventListener("navigate", async (event) => {
-    const url = document.location.href;
+    const url = event.destination?.url || document.location.href;
     if (
         url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?") ||
         url.includes("adsmanager.facebook.com/adsmanager/manage/ads?") ||
         url.includes("adsmanager.facebook.com/adsmanager/manage/campaigns?")
     ) {
-        loadAllData().then(({
+        loadAllData(url).then(({
             campaignsOption,
             adsetsOption,
             adsOption
@@ -531,7 +664,7 @@ const handleReplaceContent = (options) => {
                             }
                         }
                     } else {
-                        const reachEl = cell.querySelector("span");
+                        const reachEl = [...cell.querySelectorAll("span")].findLast(el => !el.querySelector("span"));
                         if (reachEl) {
                             if (options[rowIndex].reach === "_") {
                                 reachEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
@@ -588,7 +721,7 @@ const handleReplaceContent = (options) => {
                             }
                         }
                     } else {
-                        const viewEl = cell.querySelector("span");
+                        const viewEl = [...cell.querySelectorAll("span")].findLast(el => !el.querySelector("span"));
                         if (viewEl) {
                             if (options[rowIndex].views === "_") {
                                 viewEl.innerHTML = `<div geotextcolor="value" data-hover="tooltip" data-tooltip-display="overflow" data-tooltip-text-direction="auto" class=" _as5y xmi5d70 x1fvot60 xo1l8bm xxio538 x1lliihq x6ikm8r x10wlt62 xlyipyv xuxw1ft xbsr9hj"><span>—</span></div>`;
@@ -659,7 +792,7 @@ function autoCleanClickEvents(parentSelector, childSelector, callback) {
 
     }
 }
-""".replace("${__CAMPAIGNS__}", campaigns_json).replace("${__ADSETS__}", adsets_json).replace("${__ADS__}", ads_json)
+""".replace("${__CAMPAIGNS__}", campaigns_json).replace("${__ADSETS__}", adsets_json).replace("${__ADS__}", ads_json).replace("${__DATE_PRESETS__}", date_presets_json)
     return inject_script
 
 
@@ -718,7 +851,6 @@ def run_session(data=None, skip_license=False):
 
         try:
             while True:
-                browser.add_init_script(inject_script)
                 time.sleep(10)
         except Exception:
             try:

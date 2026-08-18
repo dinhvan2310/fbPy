@@ -19,7 +19,10 @@ _DEFAULT = {
     "campaigns": [],
     "adsetsOption": [],
     "adsOption": [],
+    "datePresets": {},
 }
+
+_DATA_KEYS = ("campaigns", "adsetsOption", "adsOption")
 
 
 def app_data_dir() -> str:
@@ -41,6 +44,32 @@ def chrome_profile_dir() -> str:
 
 def default_data() -> Dict[str, Any]:
     return json.loads(json.dumps(_DEFAULT))
+
+
+def _merge_with_defaults(data: Dict[str, Any]) -> Dict[str, Any]:
+    merged = default_data()
+    merged.update(data)
+    for key in _DATA_KEYS:
+        if not isinstance(merged.get(key), list):
+            merged[key] = []
+
+    raw_presets = merged.get("datePresets")
+    if not isinstance(raw_presets, dict):
+        merged["datePresets"] = {}
+        return merged
+
+    presets = {}
+    for preset_key, raw_preset in raw_presets.items():
+        if not isinstance(preset_key, str) or not isinstance(raw_preset, dict):
+            continue
+        preset = {}
+        for data_key in _DATA_KEYS:
+            value = raw_preset.get(data_key)
+            if isinstance(value, list):
+                preset[data_key] = value
+        presets[preset_key] = preset
+    merged["datePresets"] = presets
+    return merged
 
 
 def _exe_dir() -> str:
@@ -117,12 +146,7 @@ def load_store() -> Dict[str, Any]:
                 raw = _decrypt(f.read())
             data = json.loads(raw.decode("utf-8"))
             if isinstance(data, dict):
-                merged = default_data()
-                merged.update(data)
-                for key in ("campaigns", "adsetsOption", "adsOption"):
-                    if not isinstance(merged.get(key), list):
-                        merged[key] = []
-                return merged
+                return _merge_with_defaults(data)
         except Exception:
             pass
 
@@ -132,8 +156,7 @@ def load_store() -> Dict[str, Any]:
             with open(legacy, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict):
-                merged = default_data()
-                merged.update(data)
+                merged = _merge_with_defaults(data)
                 save_store(merged)
                 return merged
         except Exception:

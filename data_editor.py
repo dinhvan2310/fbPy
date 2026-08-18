@@ -7,7 +7,9 @@ Quản lý FB — bảng nhập liệu offline.
 import os
 import sys
 import subprocess
+import calendar
 import tkinter as tk
+from datetime import date, datetime
 from tkinter import ttk, messagebox
 
 from data_store import load_store, save_store, store_path
@@ -29,6 +31,27 @@ COLUMNS = (
 
 COL_KEYS = [c[0] for c in COLUMNS]
 COL_LABELS = [c[1] for c in COLUMNS]
+DATE_INPUT_FORMAT = "%d/%m/%Y"
+
+
+def parse_preset_range(from_text, to_text):
+    try:
+        from_date = datetime.strptime(from_text.strip(), DATE_INPUT_FORMAT).date()
+        to_date = datetime.strptime(to_text.strip(), DATE_INPUT_FORMAT).date()
+    except ValueError as exc:
+        raise ValueError("Ngày phải đúng định dạng DD/MM/YYYY") from exc
+    if from_date > to_date:
+        raise ValueError("Ngày bắt đầu không được sau ngày kết thúc")
+    return f"{from_date:%Y%m%d}-{to_date:%Y%m%d}"
+
+
+def format_preset_label(preset_key):
+    try:
+        from_date = datetime.strptime(preset_key[:8], "%Y%m%d")
+        to_date = datetime.strptime(preset_key[9:], "%Y%m%d")
+        return f"{from_date:%d/%m/%Y} → {to_date:%d/%m/%Y}"
+    except (TypeError, ValueError):
+        return str(preset_key)
 
 
 def _resource_path(*parts):
@@ -70,11 +93,15 @@ class LedgerPadApp:
         self.data = {}
         self._edit_entry = None
         self._edit_ctx = None
+        self._date_picker = None
+        self.active_preset_key = None
+        self._preset_keys = []
 
         self._load()
         self._build_theme()
         self.root.withdraw()
         self._build_ui()
+        self._refresh_preset_choices()
         self._populate()
         self.root.after(50, self._ensure_access_code)
 
@@ -88,6 +115,7 @@ class LedgerPadApp:
             "campaigns": [],
             "adsetsOption": [],
             "adsOption": [],
+            "datePresets": {},
         }
 
     def _load(self):
@@ -211,10 +239,53 @@ class LedgerPadApp:
         sheet_card = ttk.Frame(shell, style="Card.TFrame", padding=12)
         sheet_card.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
         sheet_card.columnconfigure(0, weight=1)
-        sheet_card.rowconfigure(1, weight=1)
+        sheet_card.rowconfigure(2, weight=1)
+
+        preset_bar = ttk.Frame(sheet_card, style="Card.TFrame")
+        preset_bar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        preset_bar.columnconfigure(1, weight=1)
+
+        ttk.Label(preset_bar, text="Bộ dữ liệu", style="Card.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.preset_var = tk.StringVar(value="Mặc định")
+        self.preset_combo = ttk.Combobox(
+            preset_bar,
+            textvariable=self.preset_var,
+            state="readonly",
+            width=28,
+        )
+        self.preset_combo.grid(row=0, column=1, sticky="ew", padx=(0, 12))
+        self.preset_combo.bind("<<ComboboxSelected>>", self._on_preset_selected)
+
+        ttk.Label(preset_bar, text="Từ", style="Card.TLabel").grid(row=0, column=2, padx=(0, 5))
+        self.from_date_var = tk.StringVar()
+        from_date_field = ttk.Frame(preset_bar, style="Card.TFrame")
+        from_date_field.grid(row=0, column=3, padx=(0, 8))
+        self.from_date_entry = ttk.Entry(from_date_field, textvariable=self.from_date_var, width=11)
+        self.from_date_entry.pack(side=tk.LEFT)
+        ttk.Button(
+            from_date_field,
+            text="📅",
+            width=3,
+            command=lambda: self._open_date_picker(self.from_date_var, self.from_date_entry),
+        ).pack(side=tk.LEFT, padx=(3, 0))
+        ttk.Label(preset_bar, text="Đến", style="Card.TLabel").grid(row=0, column=4, padx=(0, 5))
+        self.to_date_var = tk.StringVar()
+        to_date_field = ttk.Frame(preset_bar, style="Card.TFrame")
+        to_date_field.grid(row=0, column=5, padx=(0, 8))
+        self.to_date_entry = ttk.Entry(to_date_field, textvariable=self.to_date_var, width=11)
+        self.to_date_entry.pack(side=tk.LEFT)
+        ttk.Button(
+            to_date_field,
+            text="📅",
+            width=3,
+            command=lambda: self._open_date_picker(self.to_date_var, self.to_date_entry),
+        ).pack(side=tk.LEFT, padx=(3, 0))
+        ttk.Button(preset_bar, text="Tạo / nạp", command=self._create_or_load_preset).grid(row=0, column=6, padx=(0, 8))
+        self.delete_preset_button = ttk.Button(preset_bar, text="Xóa preset", command=self._delete_active_preset)
+        self.delete_preset_button.grid(row=0, column=7)
 
         top_bar = ttk.Frame(sheet_card, style="Card.TFrame")
-        top_bar.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        top_bar.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         top_bar.columnconfigure(0, weight=1)
 
         self.row_count_label = ttk.Label(top_bar, text="", style="CardMuted.TLabel")
@@ -226,7 +297,7 @@ class LedgerPadApp:
 
         self.tab_keys = [k for k, _ in SHEETS]
         self.notebook = ttk.Notebook(sheet_card)
-        self.notebook.grid(row=1, column=0, sticky="nsew")
+        self.notebook.grid(row=2, column=0, sticky="nsew")
         self.notebook.bind("<<NotebookTabChanged>>", lambda e: (self._destroy_inline_edit(), self._refresh_row_count()))
 
         for key, title in SHEETS:
@@ -320,6 +391,105 @@ class LedgerPadApp:
         self.row_menu.add_command(label="Xóa dòng", command=self._delete_current)
         self._menu_key = None
 
+    def _date_presets(self):
+        presets = self.data.get("datePresets")
+        if not isinstance(presets, dict):
+            presets = {}
+            self.data["datePresets"] = presets
+        return presets
+
+    def _open_date_picker(self, target_var, anchor):
+        if self._date_picker is not None:
+            self._date_picker.close()
+        self._date_picker = DatePickerPopup(
+            self.root,
+            target_var,
+            anchor,
+            on_close=lambda: setattr(self, "_date_picker", None),
+        )
+
+    def _active_dataset(self):
+        if self.active_preset_key is None:
+            return self.data
+        return self._date_presets().setdefault(self.active_preset_key, {})
+
+    def _refresh_preset_choices(self, select_key=None):
+        if select_key is not None:
+            self.active_preset_key = select_key
+        keys = sorted(self._date_presets())
+        self._preset_keys = [None] + keys
+        labels = ["Mặc định"] + [format_preset_label(key) for key in keys]
+        self.preset_combo.configure(values=labels)
+
+        try:
+            index = self._preset_keys.index(self.active_preset_key)
+        except ValueError:
+            self.active_preset_key = None
+            index = 0
+        self.preset_combo.current(index)
+        self._sync_preset_controls()
+
+    def _sync_preset_controls(self):
+        if self.active_preset_key is None:
+            self.from_date_var.set("")
+            self.to_date_var.set("")
+            self.delete_preset_button.configure(state=tk.DISABLED)
+            return
+
+        try:
+            from_date = datetime.strptime(self.active_preset_key[:8], "%Y%m%d")
+            to_date = datetime.strptime(self.active_preset_key[9:], "%Y%m%d")
+            self.from_date_var.set(from_date.strftime(DATE_INPUT_FORMAT))
+            self.to_date_var.set(to_date.strftime(DATE_INPUT_FORMAT))
+        except ValueError:
+            self.from_date_var.set("")
+            self.to_date_var.set("")
+        self.delete_preset_button.configure(state=tk.NORMAL)
+
+    def _on_preset_selected(self, _event=None):
+        index = self.preset_combo.current()
+        if index < 0 or index >= len(self._preset_keys):
+            return
+        next_key = self._preset_keys[index]
+        if next_key == self.active_preset_key:
+            return
+        self.autosave()
+        self.active_preset_key = next_key
+        self._sync_preset_controls()
+        self._populate()
+
+    def _create_or_load_preset(self):
+        try:
+            preset_key = parse_preset_range(self.from_date_var.get(), self.to_date_var.get())
+        except ValueError as exc:
+            messagebox.showerror("Khoảng ngày", str(exc))
+            return
+
+        self.autosave()
+        presets = self._date_presets()
+        created = preset_key not in presets
+        presets.setdefault(preset_key, {key: [] for key, _ in SHEETS})
+        self.active_preset_key = preset_key
+        self._save(silent=True)
+        self._refresh_preset_choices(select_key=preset_key)
+        self._populate()
+        self._set_status("Đã tạo preset" if created else "Đã nạp preset")
+
+    def _delete_active_preset(self):
+        preset_key = self.active_preset_key
+        if preset_key is None:
+            return
+        label = format_preset_label(preset_key)
+        if not messagebox.askyesno("Xóa preset", f"Xóa toàn bộ dữ liệu preset {label}?"):
+            return
+
+        self._date_presets().pop(preset_key, None)
+        self.active_preset_key = None
+        self._save(silent=True)
+        self._refresh_preset_choices()
+        self._populate()
+        self._set_status("Đã xóa preset")
+
     def _show_row_menu(self, event, key):
         self._destroy_inline_edit()
         tree = self.trees[key]
@@ -362,15 +532,17 @@ class LedgerPadApp:
         key = self._current_key()
         n = len(self.trees[key].get_children())
         title = dict(SHEETS)[key]
-        self.row_count_label.config(text=f"{title}  ·  {n} dòng")
+        dataset = "Mặc định" if self.active_preset_key is None else format_preset_label(self.active_preset_key)
+        self.row_count_label.config(text=f"{title}  ·  {n} dòng  ·  {dataset}")
 
     def _set_status(self, message):
         return
     def _populate(self):
+        source = self._active_dataset()
         for key, tree in self.trees.items():
             for item in tree.get_children():
                 tree.delete(item)
-            for i, item in enumerate(self.data.get(key, [])):
+            for i, item in enumerate(source.get(key, [])):
                 tag = "even" if i % 2 == 0 else "odd"
                 tree.insert(
                     "",
@@ -462,7 +634,7 @@ class LedgerPadApp:
                 skipped += 1
                 continue
             try:
-                values = [int(p) if p else 0 for p in parts]
+                values = [p if p == "_" else int(p) if p else 0 for p in parts]
             except ValueError:
                 skipped += 1
                 continue
@@ -601,10 +773,10 @@ class LedgerPadApp:
         tree, _key, row_id, col_index = self._edit_ctx
         raw = self._edit_entry.get().strip()
         try:
-            value = int(raw) if raw else 0
+            value = raw if raw == "_" else int(raw) if raw else 0
         except ValueError:
             self._destroy_inline_edit()
-            self._set_status("Chỉ nhập số nguyên")
+            self._set_status("Chỉ nhập số nguyên hoặc _")
             return
 
         if not tree.exists(row_id):
@@ -634,6 +806,7 @@ class LedgerPadApp:
     def autosave(self):
         try:
             # licenseKey chỉ đổi qua dialog mã truy cập
+            target = self._active_dataset()
             for key, tree in self.trees.items():
                 items = []
                 for item_id in tree.get_children():
@@ -641,15 +814,136 @@ class LedgerPadApp:
                     row = {}
                     for i, col in enumerate(COL_KEYS):
                         try:
-                            row[col] = int(values[i]) if values[i] else 0
+                            raw = values[i] if i < len(values) else ""
+                            row[col] = raw if raw == "_" else int(raw) if raw else 0
                         except (ValueError, IndexError):
                             row[col] = 0
                     items.append(row)
-                self.data[key] = items
+                target[key] = items
             if self._save(silent=True):
                 self._set_status("Đã lưu")
         except Exception:
             pass
+
+
+class DatePickerPopup:
+    WEEKDAY_LABELS = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
+
+    def __init__(self, parent, target_var, anchor, on_close=None):
+        self.target_var = target_var
+        self.on_close = on_close
+        self._closed = False
+
+        try:
+            selected = datetime.strptime(target_var.get().strip(), DATE_INPUT_FORMAT).date()
+        except ValueError:
+            selected = date.today()
+        self.selected_date = selected
+        self.year = selected.year
+        self.month = selected.month
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Chọn ngày")
+        self.dialog.resizable(False, False)
+        self.dialog.transient(parent)
+        self.dialog.protocol("WM_DELETE_WINDOW", self.close)
+        self.dialog.bind("<Escape>", lambda _event: self.close())
+
+        shell = ttk.Frame(self.dialog, padding=10)
+        shell.pack(fill=tk.BOTH, expand=True)
+
+        header = ttk.Frame(shell)
+        header.pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(header, text="‹", width=3, command=lambda: self._change_month(-1)).pack(side=tk.LEFT)
+        self.month_label = ttk.Label(header, anchor=tk.CENTER, font=("Segoe UI Semibold", 10))
+        self.month_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=8)
+        ttk.Button(header, text="›", width=3, command=lambda: self._change_month(1)).pack(side=tk.RIGHT)
+
+        self.calendar_frame = ttk.Frame(shell)
+        self.calendar_frame.pack(fill=tk.BOTH, expand=True)
+        self._render_month()
+
+        footer = ttk.Frame(shell)
+        footer.pack(fill=tk.X, pady=(8, 0))
+        ttk.Button(footer, text="Hôm nay", command=self._select_today).pack(side=tk.LEFT)
+        ttk.Button(footer, text="Đóng", command=self.close).pack(side=tk.RIGHT)
+
+        self.dialog.update_idletasks()
+        x = anchor.winfo_rootx()
+        y = anchor.winfo_rooty() + anchor.winfo_height() + 4
+        screen_width = self.dialog.winfo_screenwidth()
+        screen_height = self.dialog.winfo_screenheight()
+        width = self.dialog.winfo_reqwidth()
+        height = self.dialog.winfo_reqheight()
+        x = max(0, min(x, screen_width - width - 8))
+        y = max(0, min(y, screen_height - height - 40))
+        self.dialog.geometry(f"+{x}+{y}")
+        self.dialog.deiconify()
+        self.dialog.lift()
+        self.dialog.grab_set()
+        self.dialog.focus_set()
+
+    def _render_month(self):
+        for child in self.calendar_frame.winfo_children():
+            child.destroy()
+
+        self.month_label.configure(text=f"Tháng {self.month:02d}/{self.year}")
+        for column, label in enumerate(self.WEEKDAY_LABELS):
+            ttk.Label(self.calendar_frame, text=label, anchor=tk.CENTER, width=4).grid(
+                row=0, column=column, padx=1, pady=(0, 3)
+            )
+
+        weeks = calendar.Calendar(firstweekday=calendar.MONDAY).monthdayscalendar(self.year, self.month)
+        for row_index, week in enumerate(weeks, start=1):
+            for column, day_number in enumerate(week):
+                if day_number == 0:
+                    ttk.Label(self.calendar_frame, text="", width=4).grid(
+                        row=row_index, column=column, padx=1, pady=1
+                    )
+                    continue
+
+                is_selected = (
+                    self.selected_date.year == self.year
+                    and self.selected_date.month == self.month
+                    and self.selected_date.day == day_number
+                )
+                button = ttk.Button(
+                    self.calendar_frame,
+                    text=str(day_number),
+                    width=4,
+                    command=lambda day_value=day_number: self._select_day(day_value),
+                )
+                if is_selected:
+                    button.state(["pressed"])
+                button.grid(row=row_index, column=column, padx=1, pady=1)
+
+    def _change_month(self, offset):
+        month_index = self.year * 12 + (self.month - 1) + offset
+        self.year, zero_based_month = divmod(month_index, 12)
+        self.month = zero_based_month + 1
+        self._render_month()
+
+    def _select_day(self, day_number):
+        selected = date(self.year, self.month, day_number)
+        self.target_var.set(selected.strftime(DATE_INPUT_FORMAT))
+        self.close()
+
+    def _select_today(self):
+        today = date.today()
+        self.target_var.set(today.strftime(DATE_INPUT_FORMAT))
+        self.close()
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self.dialog.grab_release()
+            self.dialog.destroy()
+        except tk.TclError:
+            pass
+        if self.on_close:
+            self.on_close()
 
 
 class AccessCodeDialog:
