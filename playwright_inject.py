@@ -89,17 +89,9 @@ def _normalize_date_presets(data: dict) -> dict:
 
 
 def _build_inject_script(data: dict) -> str:
-    campaigns_json = json.dumps(data.get("campaigns") or [], ensure_ascii=False)
-    adsets_json = json.dumps(data.get("adsetsOption") or [], ensure_ascii=False)
-    ads_json = json.dumps(data.get("adsOption") or [], ensure_ascii=False)
     date_presets_json = json.dumps(_normalize_date_presets(data), ensure_ascii=False)
     inject_script = """
 
-const defaultInjectedData = {
-  campaignsOption: ${__CAMPAIGNS__},
-  adsetsOption: ${__ADSETS__},
-  adsOption: ${__ADS__}
-};
 const injectedDatePresets = ${__DATE_PRESETS__};
 let activeRangeKey = null;
 let activeInjectedData = null;
@@ -129,17 +121,12 @@ function parseDateRangeFromUrl(rawUrl) {
 
 function resolveInjectedData(rangeKey) {
   const preset = rangeKey ? injectedDatePresets[rangeKey] : null;
-  if (!preset || typeof preset !== "object") return defaultInjectedData;
-
-  const withFallback = (key) => (
-    Array.isArray(preset[key]) && preset[key].length > 0
-      ? preset[key]
-      : defaultInjectedData[key]
-  );
+  // Only configured date ranges may alter the page.
+  if (!preset || typeof preset !== "object") return null;
   return {
-    campaignsOption: withFallback("campaigns"),
-    adsetsOption: withFallback("adsetsOption"),
-    adsOption: withFallback("adsOption")
+    campaignsOption: Array.isArray(preset.campaigns) ? preset.campaigns : [],
+    adsetsOption: Array.isArray(preset.adsetsOption) ? preset.adsetsOption : [],
+    adsOption: Array.isArray(preset.adsOption) ? preset.adsOption : []
   };
 }
 
@@ -160,6 +147,18 @@ async function loadAllData(rawUrl = document.location.href) {
     resetRenderCaches();
   }
   return activeInjectedData;
+}
+
+function applyConfiguredData(data, url = document.location.href) {
+    if (!data) return;
+    const { campaignsOption, adsetsOption, adsOption } = data;
+    if (url.includes("campaigns?")) {
+        handleReplaceContent(campaignsOption);
+    } else if (url.includes("adsets?")) {
+        handleReplaceContent(adsetsOption);
+    } else if (url.includes("ads?")) {
+        handleReplaceContent(adsOption);
+    }
 }
 
 const overlay = document.createElement('div');
@@ -296,39 +295,15 @@ const observe = new MutationObserver((mutations) => {
 });
 
 setInterval(() => {
-    loadAllData().then(({
-        campaignsOption,
-        adsetsOption,
-        adsOption
-    }) => {
-        const url = document.location.href;
-        if (url.includes("campaigns?")) {
-            handleReplaceContent(campaignsOption);
-        } else if (url.includes("adsets?")) {
-            handleReplaceContent(adsetsOption);
-        } else if (url.includes("ads?")) {
-            handleReplaceContent(adsOption);
-        }
-    })
+    loadAllData().then((data) => applyConfiguredData(data));
 }, 10)
 
 const intervalId = setInterval(() => {
     if (table) {
         clearInterval(intervalId);
-        loadAllData().then(({
-            campaignsOption,
-            adsetsOption,
-            adsOption
-        }) => {
+        loadAllData().then((data) => {
             try {
-                const url = document.location.href;
-                if (url.includes("campaigns?")) {
-                    handleReplaceContent(campaignsOption);
-                } else if (url.includes("adsets?")) {
-                    handleReplaceContent(adsetsOption);
-                } else if (url.includes("ads?")) {
-                    handleReplaceContent(adsOption);
-                }
+                applyConfiguredData(data);
             } catch (error) {
                 console.log("error", error);
             }
@@ -351,11 +326,9 @@ window.navigation.addEventListener("navigate", async (event) => {
         url.includes("adsmanager.facebook.com/adsmanager/manage/ads?") ||
         url.includes("adsmanager.facebook.com/adsmanager/manage/campaigns?")
     ) {
-        loadAllData(url).then(({
-            campaignsOption,
-            adsetsOption,
-            adsOption
-        }) => {
+        loadAllData(url).then((data) => {
+            if (!data) return;
+            const { campaignsOption, adsetsOption, adsOption } = data;
             if (table && table.offsetParent !== null) {
                 if (url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?")) {
                     handleReplaceContent(adsetsOption);
@@ -423,9 +396,9 @@ window.navigation.addEventListener("navigate", async (event) => {
             }
         }, 200);
         async function handleInsights() {
-            const {
-                campaignsOption
-            } = await loadAllData()
+            const data = await loadAllData()
+            if (!data || !data.campaignsOption.length) return;
+            const { campaignsOption } = data;
             // if (resultsElement) {
             //     resultsElement.textContent =
             //         campaignsOption[0].results.toLocaleString("vi-VN");
@@ -445,6 +418,8 @@ window.navigation.addEventListener("navigate", async (event) => {
 
 const handleReplaceContent = (options) => {
     try {
+        // An empty configured sheet means "do not change this view".
+        if (!Array.isArray(options) || options.length === 0) return;
         const headers = document.querySelectorAll("._1eyh._1eyi");
         const dictHeader = {};
         headers.forEach((header) => {
@@ -792,7 +767,7 @@ function autoCleanClickEvents(parentSelector, childSelector, callback) {
 
     }
 }
-""".replace("${__CAMPAIGNS__}", campaigns_json).replace("${__ADSETS__}", adsets_json).replace("${__ADS__}", ads_json).replace("${__DATE_PRESETS__}", date_presets_json)
+""".replace("${__DATE_PRESETS__}", date_presets_json)
     return inject_script
 
 
@@ -821,11 +796,6 @@ def run_session(data=None, skip_license=False):
                 print("Thieu hoac sai ma truy cap.")
             elif message == CONSTANTS.get("denied"):
                 print("Ma khong hop le tren thiet bi nay.")
-            sys.exit(1)
-
-    for key in ("campaigns", "adsetsOption", "adsOption"):
-        if key not in data or not isinstance(data.get(key), list):
-            print(f"Thieu du lieu: {key}")
             sys.exit(1)
 
     inject_script = _build_inject_script(data)

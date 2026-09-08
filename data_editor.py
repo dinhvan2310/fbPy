@@ -246,7 +246,7 @@ class LedgerPadApp:
         preset_bar.columnconfigure(1, weight=1)
 
         ttk.Label(preset_bar, text="Bộ dữ liệu", style="Card.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 8))
-        self.preset_var = tk.StringVar(value="Mặc định")
+        self.preset_var = tk.StringVar()
         self.preset_combo = ttk.Combobox(
             preset_bar,
             textvariable=self.preset_var,
@@ -410,23 +410,23 @@ class LedgerPadApp:
 
     def _active_dataset(self):
         if self.active_preset_key is None:
-            return self.data
+            return {}
         return self._date_presets().setdefault(self.active_preset_key, {})
 
     def _refresh_preset_choices(self, select_key=None):
         if select_key is not None:
             self.active_preset_key = select_key
         keys = sorted(self._date_presets())
-        self._preset_keys = [None] + keys
-        labels = ["Mặc định"] + [format_preset_label(key) for key in keys]
+        self._preset_keys = keys
+        labels = [format_preset_label(key) for key in keys]
         self.preset_combo.configure(values=labels)
 
-        try:
-            index = self._preset_keys.index(self.active_preset_key)
-        except ValueError:
-            self.active_preset_key = None
-            index = 0
-        self.preset_combo.current(index)
+        if self.active_preset_key not in self._preset_keys:
+            self.active_preset_key = self._preset_keys[0] if self._preset_keys else None
+        if self.active_preset_key is None:
+            self.preset_var.set("")
+        else:
+            self.preset_combo.current(self._preset_keys.index(self.active_preset_key))
         self._sync_preset_controls()
 
     def _sync_preset_controls(self):
@@ -532,7 +532,7 @@ class LedgerPadApp:
         key = self._current_key()
         n = len(self.trees[key].get_children())
         title = dict(SHEETS)[key]
-        dataset = "Mặc định" if self.active_preset_key is None else format_preset_label(self.active_preset_key)
+        dataset = "Chưa chọn khoảng ngày" if self.active_preset_key is None else format_preset_label(self.active_preset_key)
         self.row_count_label.config(text=f"{title}  ·  {n} dòng  ·  {dataset}")
 
     def _set_status(self, message):
@@ -806,6 +806,8 @@ class LedgerPadApp:
     def autosave(self):
         try:
             # licenseKey chỉ đổi qua dialog mã truy cập
+            if self.active_preset_key is None:
+                return
             target = self._active_dataset()
             for key, tree in self.trees.items():
                 items = []
