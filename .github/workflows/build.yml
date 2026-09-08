@@ -3,12 +3,13 @@ name: Build Windows EXE
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -38,3 +39,9 @@ jobs:
           path: dist/QuanLyFB.exe
           if-no-files-found: error
           retention-days: 14
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME dist/QuanLyFB.exe --title $env:GITHUB_REF_NAME --generate-notes
