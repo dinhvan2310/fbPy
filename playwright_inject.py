@@ -91,6 +91,14 @@ def _normalize_date_presets(data: dict) -> dict:
 def _build_inject_script(data: dict) -> str:
     date_presets_json = json.dumps(_normalize_date_presets(data), ensure_ascii=False)
     inject_script = """
+(() => {
+// The page scanner can see URL changes without a full reload. Keep timers and
+// listeners single-instance for each document.
+const INJECTION_MARKER = "__fb_session_injection_v3__";
+if (window[INJECTION_MARKER]) return;
+window[INJECTION_MARKER] = true;
+
+if (window.location.hostname !== "adsmanager.facebook.com") return;
 
 const injectedDatePresets = ${__DATE_PRESETS__};
 let activeRangeKey = null;
@@ -767,8 +775,36 @@ function autoCleanClickEvents(parentSelector, childSelector, callback) {
 
     }
 }
+})();
 """.replace("${__DATE_PRESETS__}", date_presets_json)
     return inject_script
+
+
+def _inject_ready_pages(context, script: str, injected_documents: set) -> None:
+    """Inject only into Ads Manager documents that have finished DOM setup."""
+
+    for page in context.pages:
+        if page.is_closed():
+            continue
+        url = page.url
+        if not url.startswith("https://adsmanager.facebook.com/"):
+            continue
+
+        document_key = (id(page), url)
+        if document_key in injected_documents:
+            continue
+
+        try:
+            # Never evaluate while a new tab is navigating.  This avoids the
+            # persistent-context deadlock caused by document-start hooks and
+            # page lifecycle callbacks.
+            page.wait_for_load_state("domcontentloaded", timeout=200)
+            page.evaluate(script)
+            injected_documents.add(document_key)
+        except Exception as error:
+            # A short navigation can race this scan; retry on the next pass.
+            if not page.is_closed():
+                print(f"Dang cho tab san sang de inject: {error}")
 
 
 def run_session(data=None, skip_license=False):
@@ -816,12 +852,29 @@ def run_session(data=None, skip_license=False):
             no_viewport=True,
         )
 
-        if inject_script:
-            browser.add_init_script(inject_script)
+        injected_documents = set()
+        last_injection_scan = 0.0
 
         try:
             while True:
-                time.sleep(10)
+                if inject_script and time.monotonic() - last_injection_scan >= 0.25:
+                    _inject_ready_pages(browser, inject_script, injected_documents)
+                    last_injection_scan = time.monotonic()
+
+                # Do not use time.sleep here. In Playwright's synchronous API,
+                # a plain Python sleep prevents its dispatcher from processing
+                # Chrome's Target events. Existing tabs keep working, but a
+                # manually opened second tab can remain stuck at New Tab.
+                active_pages = [page for page in browser.pages if not page.is_closed()]
+                if active_pages:
+                    try:
+                        active_pages[0].wait_for_timeout(50)
+                    except Exception:
+                        # The selected tab may have been closed while waiting;
+                        # choose a live tab again on the next iteration.
+                        pass
+                else:
+                    time.sleep(0.05)
         except Exception:
             try:
                 browser.close()
