@@ -17,6 +17,8 @@ __pycache__/
 
 # Local runtime / backups
 chrome-profile/
+python-runtime/
+*.log
 data.json.backup
 *.backup
 

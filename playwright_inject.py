@@ -99,7 +99,6 @@ const INJECTION_MARKER = "__fb_session_injection_v3__";
 if (window.location.hostname !== "adsmanager.facebook.com" ||
     document.readyState === "loading") return;
 if (window[INJECTION_MARKER]) return;
-window[INJECTION_MARKER] = true;
 
 const injectedDatePresets = ${__DATE_PRESETS__};
 let activeRangeKey = null;
@@ -278,31 +277,6 @@ let costPerResultFake = ''
 let spentFake = ''
 let reachFake = ''
 let viewsFake = ''
-const observe = new MutationObserver((mutations) => {
-    // loadAllData().then(({
-    //     campaignsOption,
-    //     adsetsOption,
-    //     adsOption
-    // }) => {
-    //     mutations.forEach((mutation) => {
-    //         try {
-    //             if (mutation.type === "childList") {
-    //                 const url = document.location.href;
-    //                 if (url.includes("campaigns?")) {
-    //                     handleReplaceContent(campaignsOption);
-    //                 } else if (url.includes("adsets?")) {
-    //                     handleReplaceContent(adsetsOption);
-    //                 } else if (url.includes("ads?")) {
-    //                     handleReplaceContent(adsOption);
-    //                 }
-    //             }
-    //         } catch (error) {
-    //             console.log("error", error);
-    //         }
-    //     });
-    // })
-});
-
 setInterval(() => {
     loadAllData().then((data) => applyConfiguredData(data));
 }, 10)
@@ -316,19 +290,13 @@ const intervalId = setInterval(() => {
             } catch (error) {
                 console.log("error", error);
             }
-            // observe.observe(table.childNodes[2], {
-            //     childList: true,
-            //     subtree: true,
-            //     characterData: false,
-            //     attributes: false,
-            // });
         })
     } else {
         table = document.querySelector("._3h1i._1mie ._3h1j");
     }
 }, 5);
 
-window.navigation.addEventListener("navigate", async (event) => {
+window.navigation?.addEventListener("navigate", async (event) => {
     const url = event.destination?.url || document.location.href;
     if (
         url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?") ||
@@ -338,6 +306,8 @@ window.navigation.addEventListener("navigate", async (event) => {
         loadAllData(url).then((data) => {
             if (!data) return;
             const { campaignsOption, adsetsOption, adsOption } = data;
+            // Facebook may have replaced the table since the previous render.
+            table = document.querySelector("._3h1i._1mie ._3h1j");
             if (table && table.offsetParent !== null) {
                 if (url.includes("adsmanager.facebook.com/adsmanager/manage/adsets?")) {
                     handleReplaceContent(adsetsOption);
@@ -373,12 +343,6 @@ window.navigation.addEventListener("navigate", async (event) => {
                         }
                     });
                 }
-                // observe.observe(table.childNodes[2], {
-                //     childList: true,
-                //     subtree: true,
-                //     characterData: false,
-                //     attributes: false,
-                // });
             }
         })
     }
@@ -445,7 +409,6 @@ const handleReplaceContent = (options) => {
         for (let i = 0; i < numCellsOnRow; i++) {
             const cell = cells[cells.length - i - 1];
             if (isHideResults) {
-                console.log("isHideResults");
                 cell.children[0].innerHTML = ''
                 continue;
             }
@@ -667,7 +630,6 @@ const handleReplaceContent = (options) => {
                         if (resultEl) {
                             if (options[rowIndex].results === "_") {
                             } else {
-                                console.log(resultEl, options[rowIndex].results.toLocaleString("vi-VN"))
                                 resultEl.textContent = options[rowIndex].results.toLocaleString("vi-VN");
                             }
                         }
@@ -720,9 +682,7 @@ const handleReplaceContent = (options) => {
         });
         removeOverlay();
     } catch {
-
-    } finally {
-
+        // Facebook can replace cells mid-render; retry on the next tick.
     }
 };
 
@@ -776,6 +736,8 @@ function autoCleanClickEvents(parentSelector, childSelector, callback) {
 
     }
 }
+// Publish success only once every handler has been initialized.
+window[INJECTION_MARKER] = true;
 })();
 """.replace("${__DATE_PRESETS__}", date_presets_json)
     return inject_script

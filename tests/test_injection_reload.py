@@ -1,6 +1,7 @@
 """Run with python -m unittest discover -s tests -v (requires Chrome)."""
 
 import tempfile
+import time
 import unittest
 
 from playwright.sync_api import sync_playwright
@@ -116,6 +117,35 @@ class InjectionReloadTests(unittest.TestCase):
         self.page.goto("https://example.com/")
         self.page.evaluate(self.script)
         self.assertFalse(self.page.evaluate(MARKER))
+
+    def test_reload_during_running_scanner_restores_effect(self):
+        self.page.goto(TARGET)
+        self.scan()
+        self.assert_effective()
+        for _ in range(3):
+            previous_origin = self.page.evaluate("performance.timeOrigin")
+            self.page.evaluate("setTimeout(() => location.reload(), 30)")
+            deadline = time.monotonic() + 5
+            restored = False
+            while time.monotonic() < deadline:
+                self.scan()
+                try:
+                    restored = self.page.evaluate("""previous =>
+                        performance.timeOrigin !== previous &&
+                        document.querySelector('#total')?.textContent === '11'
+                    """, previous_origin)
+                    if restored:
+                        break
+                    self.page.wait_for_timeout(50)
+                except Exception:
+                    pass
+            self.assertTrue(restored, "Scanner failed to restore content after reload")
+
+    def test_initialization_without_navigation_api(self):
+        self.context.add_init_script("Object.defineProperty(window, 'navigation', {value: undefined})")
+        self.page.goto(TARGET)
+        self.scan()
+        self.assert_effective()
 
 
 if __name__ == "__main__":
