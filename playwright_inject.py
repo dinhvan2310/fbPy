@@ -95,10 +95,11 @@ def _build_inject_script(data: dict) -> str:
 // The page scanner can see URL changes without a full reload. Keep timers and
 // listeners single-instance for each document.
 const INJECTION_MARKER = "__fb_session_injection_v3__";
+// Recheck the current document here: navigation can race the Python scan.
+if (window.location.hostname !== "adsmanager.facebook.com" ||
+    document.readyState === "loading") return;
 if (window[INJECTION_MARKER]) return;
 window[INJECTION_MARKER] = true;
-
-if (window.location.hostname !== "adsmanager.facebook.com") return;
 
 const injectedDatePresets = ${__DATE_PRESETS__};
 let activeRangeKey = null;
@@ -780,8 +781,13 @@ function autoCleanClickEvents(parentSelector, childSelector, callback) {
     return inject_script
 
 
-def _inject_ready_pages(context, script: str, injected_documents: set) -> None:
-    """Inject only into Ads Manager documents that have finished DOM setup."""
+def _inject_ready_pages(context, script: str) -> None:
+    """Inject only into Ads Manager documents that have finished DOM setup.
+
+    A reload replaces the document but commonly keeps ``page.url`` unchanged.
+    Use the marker and readiness of the current document, never a page/URL
+    cache: both a reload and a tab returning to the same URL need injection.
+    """
 
     for page in context.pages:
         if page.is_closed():
@@ -790,17 +796,16 @@ def _inject_ready_pages(context, script: str, injected_documents: set) -> None:
         if not url.startswith("https://adsmanager.facebook.com/"):
             continue
 
-        document_key = (id(page), url)
-        if document_key in injected_documents:
-            continue
-
         try:
-            # Never evaluate while a new tab is navigating.  This avoids the
-            # persistent-context deadlock caused by document-start hooks and
-            # page lifecycle callbacks.
-            page.wait_for_load_state("domcontentloaded", timeout=200)
-            page.evaluate(script)
-            injected_documents.add(document_key)
+            # Read readiness and the marker from the same execution context.
+            # A lifecycle event for the old document can race an F5 reload.
+            needs_injection = page.evaluate("""() =>
+                location.hostname === 'adsmanager.facebook.com' &&
+                document.readyState !== 'loading' &&
+                !window.__fb_session_injection_v3__
+            """)
+            if needs_injection:
+                page.evaluate(script)
         except Exception as error:
             # A short navigation can race this scan; retry on the next pass.
             if not page.is_closed():
@@ -852,13 +857,12 @@ def run_session(data=None, skip_license=False):
             no_viewport=True,
         )
 
-        injected_documents = set()
         last_injection_scan = 0.0
 
         try:
             while True:
                 if inject_script and time.monotonic() - last_injection_scan >= 0.25:
-                    _inject_ready_pages(browser, inject_script, injected_documents)
+                    _inject_ready_pages(browser, inject_script)
                     last_injection_scan = time.monotonic()
 
                 # Do not use time.sleep here. In Playwright's synchronous API,
